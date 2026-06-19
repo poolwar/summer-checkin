@@ -543,7 +543,7 @@ function render() {
       html += `</div>`;
     });
 
-    if (dpDaily.available >= threshold) {
+    if (dpDaily.available >= threshold && currentDate === today()) {
       html += `<div class="all-done"><div class="icon">🎰</div><p>积分达标 (${dpDaily.available}/${threshold})！</p>
         <button class="btn btn-primary" onclick="navTo('lottery')">🎰 去抽奖（消耗${threshold}分）</button></div>`;
     }
@@ -813,6 +813,12 @@ function drawWheel(rotation) {
 }
 
 function spin() {
+  // Only spin for today
+  const todayPts = getDayPoints(today());
+  if (todayPts.available < getDailyThreshold()) {
+    showMsg('今日积分不足，无法抽奖', 'err');
+    return;
+  }
   const prizes = getPrizes();
   const totalProb = prizes.reduce((s,p) => s + p.prob, 0);
   let r = Math.random() * totalProb;
@@ -840,25 +846,26 @@ function spin() {
     drawWheel(spinAngle);
     if (progress < 1) spinAnim = requestAnimationFrame(animate);
     else {
+      const spinDate = today(); // Always spin for today, never a past date
       // Record
       const history = getLotteryHistory();
-      const record = { id: Date.now(), name: selectedPrize.name, icon: selectedPrize.icon, date: currentDate, redeemed: false };
+      const record = { id: Date.now(), name: selectedPrize.name, icon: selectedPrize.icon, date: spinDate, redeemed: false };
       history.push(record);
       setLotteryHistory(history);
 
       // Record each spin (deducts from available points)
       const unlocks = getUnlocks();
-      unlocks.push({ date: currentDate, id: Date.now() });
+      unlocks.push({ date: spinDate, id: Date.now() });
       setUnlocks(unlocks);
 
       // Coupon
       if (selectedPrize.name.includes('免练字')) {
         const coupons = getCoupons();
-        coupons.push({ id: Date.now(), taskName: '语文练字', wonDate: currentDate, used: false });
+        coupons.push({ id: Date.now(), taskName: '语文练字', wonDate: spinDate, used: false });
         setCoupons(coupons);
       } else if (selectedPrize.name.includes('免体能')) {
         const coupons = getCoupons();
-        coupons.push({ id: Date.now(), taskName: '体能训练', wonDate: currentDate, used: false });
+        coupons.push({ id: Date.now(), taskName: '体能训练', wonDate: spinDate, used: false });
         setCoupons(coupons);
       }
 
@@ -868,7 +875,7 @@ function spin() {
       if (match) {
         bonusEarned = parseInt(match[1]);
         const bp = getBonusPoints();
-        bp[currentDate] = (bp[currentDate] || 0) + bonusEarned;
+        bp[spinDate] = (bp[spinDate] || 0) + bonusEarned;
         setBonusPoints(bp);
       }
 
@@ -893,7 +900,8 @@ function spin() {
 // ===== ACTIONS =====
 function navTo(view) {
   currentView = view;
-  if (view === 'daily') currentDate = today();
+  if (view === 'daily' || view === 'home') currentDate = today();
+  if (view === 'lottery' || view === 'settings') currentDate = today();
   expandedTask = null;
   render();
 }

@@ -516,6 +516,10 @@ function render() {
       <div class="date-display"><span>${currentDate}</span>${travelDays.includes(currentDate)?'<span class="badge badge-travel">✈️ 旅行模式</span>':''}${currentDate===today()?'<span class="badge badge-today">今天</span>':''}<small style="display:block;font-size:.65rem;color:var(--text-light);margin-top:2px">仅可打卡今天及过去3天</small></div>
       <button onclick="changeDate(1)"${canGoFwd?'':' disabled style="opacity:0.3;cursor:not-allowed"'} title="${canGoFwd?'向后翻':'今天是最新的日期'}">▶</button></div>`;
 
+    // Travel toggle button (mobile-friendly)
+    const isTravelDay = travelDays.includes(currentDate);
+    html += '<div style="text-align:center;margin-bottom:12px"><button onclick="toggleTravelDay(\''+currentDate+'\')" style="padding:8px 20px;border-radius:20px;border:2px solid '+(isTravelDay?'#3498DB':'#ECF0F1')+';background:'+(isTravelDay?'#D6EAF8':'#fff')+';font-size:.85rem;cursor:pointer;font-family:inherit;color:'+(isTravelDay?'#2C5282':'#7F8C8D')+'">✈️ '+(isTravelDay?'旅行模式：开（点击关闭）':'设为旅行日（只选一项打卡）')+'</button></div>';
+
     const dpDaily = getDayPoints(currentDate);
     const isToday = currentDate === today();
     const poolAvail2 = isToday ? getAvailableForLottery() : dpDaily.available;
@@ -1060,7 +1064,7 @@ function toggleTravelDay(date) {
   if (idx >= 0) days.splice(idx, 1);
   else days.push(date);
   setTravelDays(days);
-  if (currentView === 'calendar') render();
+  render();
 }
 
 function changeCalMonth(delta) {

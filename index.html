@@ -152,6 +152,7 @@ nav.bottom-nav{
   min-height:56px;padding:2px 0}
 .cal-cell:active{transform:scale(.92)}
 .cal-cell .day-num{font-weight:600;font-size:.75rem}
+.cal-cell .day-wk{font-size:.5rem;color:inherit}
 .cal-cell .day-icon{font-size:.6rem}
 .cal-cell .day-prog{font-size:.5rem;color:var(--text-light)}
 .cell-full{background:#C8E6C9;border:2px solid #5DAF7C;color:#2E5A3A}
@@ -615,11 +616,12 @@ function render() {
         if (dp3.earned >= max3) { cellClass = 'cell-full'; calFull++; }
         else if (dp3.earned > 0) { cellClass = 'cell-part'; }
       }
+      const wk = ['日','一','二','三','四','五','六'][(firstDow + day - 1) % 7];
       const isToday = ds === today();
       const inRange = isDateAllowed(ds);
       const clickAction = inRange ? "openDate('"+ds+"')" : "void(0)";
       html += '<div class="cal-cell '+cellClass+(isToday?' is-today':'')+(!inRange?' cell-oor':'')+'" onclick="'+clickAction+'" oncontextmenu="event.preventDefault();toggleTravelDay(\''+ds+'\')">'+
-        '<span class="day-num">'+day+'</span><span class="day-icon">'+icon+'</span><span class="day-prog">'+cnt+'</span><span class="day-prog">'+pts+'</span></div>';
+        '<span class="day-num">'+day+'</span><span class="day-wk">周'+wk+'</span><span class="day-icon">'+icon+'</span><span class="day-prog">'+cnt+'</span><span class="day-prog">'+pts+'</span></div>';
     }
     html += '</div>';
     // Stats after loop (accurate counts)

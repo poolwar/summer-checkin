@@ -783,10 +783,6 @@ function render() {
       <button class="btn btn-danger" onclick="clearAuth();location.reload()">🔐 锁定应用（需重新输入密码）</button>
       </div>`;
 
-    html += '<div class="card"><h3>🔒 安全</h3>'+
-      '<button class="btn btn-danger" onclick="clearAuth();navTo(\'home\');showMsg(\'🔒 已锁定，设置需重新输密码\',\'ok\')">🔐 锁定设置（离开后需密码）</button>'+
-      '</div>';
-
     html += `<div class="card"><h3>💾 数据管理</h3>
       <button class="btn btn-sm" onclick="exportData()" style="margin:4px">📤 导出全部数据</button>
       <button class="btn btn-sm" onclick="document.getElementById('importFile').click()" style="margin:4px">📥 导入数据</button>
@@ -1069,7 +1065,7 @@ function spin() {
 
 // ===== ACTIONS =====
 function navTo(view) {
-  if (view === 'settings' && !isAuthenticated()) {
+  if (view === 'settings') {
     showSettingsPassword();
     return;
   }
@@ -1680,9 +1676,7 @@ LS.set = function(k, v) {
 
 // ===== PASSWORD =====
 const APP_PASSWORD = '198415';
-function isAuthenticated() { return sessionStorage.getItem('_auth') === '1'; }
-function setAuthenticated() { sessionStorage.setItem('_auth', '1'); }
-function clearAuth() { sessionStorage.removeItem('_auth'); }
+// No caching - password required every time entering settings
 
 function showSettingsPassword() {
   const overlay = document.createElement('div');
@@ -1703,7 +1697,6 @@ function showSettingsPassword() {
 
 function checkSettingsPwd(input) {
   if (input === APP_PASSWORD) {
-    setAuthenticated();
     var ov = document.getElementById('pwdOverlay'); if(ov) ov.remove();
     currentView = 'settings'; currentDate = today(); expandedTask = null;
     render();

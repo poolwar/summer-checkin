@@ -183,12 +183,16 @@ nav.bottom-nav{
 @keyframes pulse{0%,100%{box-shadow:0 4px 20px rgba(232,132,92,0.35)}50%{box-shadow:0 4px 36px rgba(232,132,92,0.55)}}
 .cannot-spin{color:var(--text-light);font-size:.8rem;padding:14px;background:#FAFAFA;border-radius:12px}
 .spin-result{text-align:center;background:#fff;border-radius:var(--radius);padding:28px;
-  box-shadow:var(--shadow);animation:popIn .5s}
-@keyframes popIn{0%{transform:scale(.5);opacity:0}80%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
+  box-shadow:var(--shadow);animation:popIn .5s;position:relative;overflow:hidden}
+.spin-result.big-prize{border:3px solid #FFD700;box-shadow:0 0 30px rgba(255,215,0,0.3)}
+.spin-result .result-glow{position:absolute;top:-50%;left:-50%;width:200%;height:200%;
+  background:radial-gradient(circle,rgba(255,215,0,0.15),transparent 70%);pointer-events:none}
+@keyframes popIn{0%{transform:scale(.3) rotate(-5deg);opacity:0}60%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
 .result-icon{font-size:3.5rem;animation:bounce .4s infinite alternate}
 @keyframes bounce{from{transform:translateY(0)}to{transform:translateY(-10px)}}
 .result-name{font-size:1.2rem;font-weight:700;margin:14px 0 10px;color:var(--primary)}
 .result-hint{color:var(--text-light);font-size:.8rem;margin-bottom:18px}
+.wheel-canvas{max-width:100%;height:auto;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.15))}
 .prize-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}
 .prize-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#fff;
   border-radius:10px;font-size:.75rem}
@@ -648,7 +652,7 @@ function render() {
         (bp>0?'<div><span style="font-size:1rem;color:var(--success)">+'+bp+'</span><br><span style="font-size:.7rem;color:var(--text-light)">抽奖积分</span></div>':'')+
         '<div><span style="font-size:1rem">🎰×'+(todaySpins||0)+'</span><br><span style="font-size:.7rem;color:var(--text-light)">已抽次数</span></div>'+
         '</div></div>';
-      html += '<div class="wheel-wrap"><canvas id="wheelCanvas" width="320" height="320"></canvas></div>'+
+      html += '<div class="wheel-wrap"><canvas id="wheelCanvas" width="380" height="380"></canvas></div>'+
         '<div class="wheel-actions">'+
           (canSpinNow
             ? '<button class="btn-spin" onclick="spin()">🎰 开始抽奖！（消耗'+threshold+'分）</button>'
@@ -799,64 +803,186 @@ function render() {
 }
 
 // ===== WHEEL CANVAS =====
-const WHEEL_COLORS = ['#FF6B6B','#4ECDC4','#45B7D1','#96CEB4','#FFEAA7','#DDA0DD','#98D8C8','#F7DC6F'];
+const WHEEL_COLORS = [
+  ['#FF6B6B','#E55A5A'], ['#4ECDC4','#3BB5AC'], ['#FFA94D','#F09030'], ['#96CEB4','#7BB89A'],
+  ['#FFD93D','#F0C820'], ['#C792EA','#B07ADE'], ['#6BCB77','#50B35E'], ['#FF8A80','#F07066'],
+  ['#4FC3F7','#30A8D8'], ['#AED581','#95C068'], ['#FFB74D','#F0A030'], ['#BA68C8','#A050B8']
+];
 let spinAngle = 0, spinAnim = null;
+let particles = [];
 
 function drawWheel(rotation) {
   const canvas = document.getElementById('wheelCanvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   const prizes = getPrizes();
-  const size = canvas.width, center = size / 2, radius = center - 8;
+  const size = canvas.width, center = size / 2, outerR = center - 6, innerR = 30;
   const sliceAngle = (2 * Math.PI) / prizes.length;
 
   ctx.clearRect(0, 0, size, size);
+
+  // Outer shadow ring
+  ctx.beginPath();
+  ctx.arc(center, center, outerR + 4, 0, 2*Math.PI);
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.fill();
+
+  // Decorative outer ring with dots
+  ctx.beginPath();
+  ctx.arc(center, center, outerR + 1, 0, 2*Math.PI);
+  ctx.strokeStyle = '#D4A54A';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // Light bulbs on outer ring
+  for (let i = 0; i < 32; i++) {
+    const a = (i / 32) * Math.PI * 2;
+    const bx = center + Math.cos(a) * (outerR + 2);
+    const by = center + Math.sin(a) * (outerR + 2);
+    ctx.beginPath();
+    ctx.arc(bx, by, 3, 0, 2*Math.PI);
+    ctx.fillStyle = Math.floor(Date.now()/300 + i) % 2 ? '#FFD700' : '#FFF';
+    ctx.fill();
+    ctx.strokeStyle = '#C0A030';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  }
+
+  // Draw slices
   prizes.forEach((p, i) => {
     const startA = rotation * Math.PI/180 + i * sliceAngle - Math.PI/2;
     const endA = startA + sliceAngle;
+    const colors = WHEEL_COLORS[i % WHEEL_COLORS.length];
+
+    // Slice with gradient
     ctx.beginPath();
     ctx.moveTo(center, center);
-    ctx.arc(center, center, radius, startA, endA);
+    ctx.arc(center, center, outerR, startA, endA);
     ctx.closePath();
-    ctx.fillStyle = WHEEL_COLORS[i % WHEEL_COLORS.length];
+    const grad = ctx.createRadialGradient(center, center, innerR, center, center, outerR);
+    grad.addColorStop(0, colors[0]);
+    grad.addColorStop(1, colors[1]);
+    ctx.fillStyle = grad;
     ctx.fill();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 1.5;
     ctx.stroke();
 
+    // Inner highlight
+    ctx.beginPath();
+    ctx.moveTo(center, center);
+    ctx.arc(center, center, outerR * 0.5, startA, endA);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fill();
+
+    // Text
     ctx.save();
     ctx.translate(center, center);
     ctx.rotate(startA + sliceAngle/2);
-    ctx.fillStyle = '#333';
-    ctx.font = 'bold 12px sans-serif';
+
+    // Text shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.font = 'bold 18px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(p.icon, radius * 0.65, 4);
-    const name = p.name.length > 4 ? p.name.slice(0,4)+'..' : p.name;
-    ctx.font = '9px sans-serif';
-    ctx.fillText(name, radius * 0.65, 16);
+    ctx.fillText(p.icon, outerR * 0.62, 6);
+
+    // Icon
+    ctx.fillStyle = '#fff';
+    ctx.fillText(p.icon, outerR * 0.62, 5);
+
+    // Name with outline
+    const name = p.name.length > 5 ? p.name.slice(0,5)+'…' : p.name;
+    ctx.font = 'bold 11px sans-serif';
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+    ctx.lineWidth = 2.5;
+    ctx.strokeText(name, outerR * 0.62, 20);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(name, outerR * 0.62, 20);
+
     ctx.restore();
   });
 
-  // Center
+  // Inner decorative ring
   ctx.beginPath();
-  ctx.arc(center, center, 22, 0, 2*Math.PI);
-  ctx.fillStyle = '#fff'; ctx.fill();
-  ctx.strokeStyle = '#ddd'; ctx.lineWidth = 2; ctx.stroke();
-  ctx.fillStyle = '#333';
-  ctx.font = 'bold 16px sans-serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.arc(center, center, innerR + 6, 0, 2*Math.PI);
+  ctx.fillStyle = 'rgba(0,0,0,0.1)';
+  ctx.fill();
+
+  // Center hub
+  const hubGrad = ctx.createRadialGradient(center-4, center-4, 2, center, center, innerR);
+  hubGrad.addColorStop(0, '#FFF');
+  hubGrad.addColorStop(0.5, '#F5F0ED');
+  hubGrad.addColorStop(1, '#D4A54A');
+  ctx.beginPath();
+  ctx.arc(center, center, innerR, 0, 2*Math.PI);
+  ctx.fillStyle = hubGrad;
+  ctx.fill();
+  ctx.strokeStyle = '#C0A030';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // Center icon
+  ctx.fillStyle = '#555';
+  ctx.font = 'bold 20px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
   ctx.fillText('🎰', center, center);
 
-  // Pointer
+  // Pointer (top center)
+  const px = center, py = 0;
+  // Glow
   ctx.beginPath();
-  ctx.moveTo(center, 4); ctx.lineTo(center - 10, 20); ctx.lineTo(center + 10, 20);
+  ctx.moveTo(px, outerR - 34);
+  ctx.lineTo(px - 16, outerR + 4);
+  ctx.lineTo(px + 16, outerR + 4);
   ctx.closePath();
-  ctx.fillStyle = '#FF6B35'; ctx.fill();
-  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = 'rgba(232,132,92,0.2)';
+  ctx.fill();
+
+  // Pointer body
+  ctx.beginPath();
+  ctx.moveTo(px, outerR - 38);
+  ctx.lineTo(px - 14, outerR);
+  ctx.lineTo(px + 14, outerR);
+  ctx.closePath();
+  const ptrGrad = ctx.createLinearGradient(center, outerR-38, center, outerR);
+  ptrGrad.addColorStop(0, '#E8845C');
+  ptrGrad.addColorStop(1, '#D4734B');
+  ctx.fillStyle = ptrGrad;
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Pointer tip
+  ctx.beginPath();
+  ctx.arc(px, outerR - 38, 5, 0, 2*Math.PI);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  ctx.strokeStyle = '#E8845C';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+function spawnConfetti() {
+  const colors = ['#FF6B6B','#FFD93D','#4ECDC4','#FF8A80','#96CEB4','#FFA94D','#C792EA','#6BCB77'];
+  for (let i = 0; i < 60; i++) {
+    const el = document.createElement('div');
+    el.style.cssText = 'position:fixed;width:'+(6+Math.random()*10)+'px;height:'+(6+Math.random()*10)+'px;background:'+colors[Math.floor(Math.random()*colors.length)]+';border-radius:'+(Math.random()>.5?'50%':'2px')+';pointer-events:none;z-index:9999;left:'+(10+Math.random()*80)+'%;top:-20px;animation:confettiFall '+(1.5+Math.random()*2)+'s ease-out forwards;animation-delay:'+Math.random()*0.5+'s';
+    document.body.appendChild(el);
+    setTimeout(function(){ el.remove(); }, 3500);
+  }
+  // Inject keyframe if not exists
+  if (!document.getElementById('confettiStyle')) {
+    var style = document.createElement('style');
+    style.id = 'confettiStyle';
+    style.textContent = '@keyframes confettiFall{0%{transform:translateY(0) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0}}';
+    document.head.appendChild(style);
+  }
 }
 
 function spin() {
-  // Only spin for today, use pooled points (today + past 3 days makeup)
   if (getAvailableForLottery() < getDailyThreshold()) {
     showMsg('可用积分不足（含补卡共需'+getDailyThreshold()+'分），无法抽奖', 'err');
     return;
@@ -873,34 +999,40 @@ function spin() {
   const sliceAngle = 360 / prizes.length;
   const sliceCenter = targetIdx * sliceAngle + sliceAngle / 2;
   const targetAngle = 360 - sliceCenter;
-  const fullSpins = (5 + Math.floor(Math.random()*4)) * 360;
+  const fullSpins = (6 + Math.floor(Math.random()*3)) * 360;
   const finalAngle = spinAngle + fullSpins + targetAngle - (spinAngle % 360);
 
   const startAngle = spinAngle;
   const startTime = performance.now();
-  const duration = 3500;
+  const duration = 4000;
 
   function animate(now) {
     const elapsed = now - startTime;
     const progress = Math.min(elapsed / duration, 1);
-    const eased = 1 - Math.pow(1 - progress, 3);
-    spinAngle = startAngle + (finalAngle - startAngle) * eased;
+    // Custom easing: fast start, slow middle, fast end (tick-tock feel)
+    var eased;
+    if (progress < 0.7) {
+      eased = 1 - Math.pow(1 - progress/0.7, 2.5);
+    } else {
+      var p2 = (progress - 0.7) / 0.3;
+      eased = 1 - (1 - p2) * (1 - p2) * 0.3;
+    }
+    spinAngle = startAngle + (finalAngle - startAngle) * Math.min(1, eased);
     drawWheel(spinAngle);
     if (progress < 1) spinAnim = requestAnimationFrame(animate);
     else {
-      const spinDate = today(); // Always spin for today, never a past date
-      // Record
+      // Confetti!
+      spawnConfetti();
+
+      const spinDate = today();
       const history = getLotteryHistory();
-      const record = { id: Date.now(), name: selectedPrize.name, icon: selectedPrize.icon, date: spinDate, redeemed: false };
-      history.push(record);
+      history.push({ id: Date.now(), name: selectedPrize.name, icon: selectedPrize.icon, date: spinDate, redeemed: false });
       setLotteryHistory(history);
 
-      // Record each spin (deducts from available points)
       const unlocks = getUnlocks();
       unlocks.push({ date: spinDate, id: Date.now() });
       setUnlocks(unlocks);
 
-      // Coupon
       if (selectedPrize.name.includes('免练字')) {
         const coupons = getCoupons();
         coupons.push({ id: Date.now(), taskName: '语文练字', wonDate: spinDate, used: false });
@@ -911,7 +1043,6 @@ function spin() {
         setCoupons(coupons);
       }
 
-      // Bonus points from lottery
       let bonusEarned = 0;
       const match = selectedPrize.name.match(/积分\+(\d+)/);
       if (match) {
@@ -921,19 +1052,22 @@ function spin() {
         setBonusPoints(bp);
       }
 
-      // Show result
-      let hint = '';
-      if (['大餐','玩具','礼物'].includes(selectedPrize.name)) hint = '🎉 恭喜！请找家长兑换！';
-      else if (selectedPrize.name.includes('免')) hint = '🎫 免做券已发放，可在打卡页面使用';
-      else if (selectedPrize.name === '谢谢参与') hint = '😅 再接再厉，明天继续加油！';
-      else if (bonusEarned > 0) hint = '⭐ +'+bonusEarned+'积分已到账！可用于继续抽奖';
-      else hint = '⭐ 积分已累计！';
+      var isBig = ['大餐','玩具','礼物'].includes(selectedPrize.name) || selectedPrize.name.includes('礼物');
+      var isSkip = selectedPrize.name.includes('免');
+      var isSorry = selectedPrize.name === '谢谢参与';
+      var resultClass = isBig ? 'big-prize' : isSorry ? 'sorry' : 'normal-prize';
+      var hint = isBig ? '🎉 恭喜！请找家长兑换！' :
+        isSkip ? '🎫 免做券已发放' :
+        isSorry ? '😅 再接再厉！' :
+        bonusEarned > 0 ? '⭐ +'+bonusEarned+'积分已到账！' : '⭐ 积分已累计！';
 
-      document.getElementById('spinResult').innerHTML = `<div class="spin-result">
-        <div class="result-icon">${selectedPrize.icon}</div>
-        <div class="result-name">${selectedPrize.name}</div>
-        <p class="result-hint">${hint}</p>
-        <button class="btn btn-primary" onclick="render()">好的</button></div>`;
+      document.getElementById('spinResult').innerHTML =
+        '<div class="spin-result '+resultClass+'">'+
+        '<div class="result-glow"></div>'+
+        '<div class="result-icon">'+selectedPrize.icon+'</div>'+
+        '<div class="result-name">'+selectedPrize.name+'</div>'+
+        '<p class="result-hint">'+hint+'</p>'+
+        '<button class="btn btn-primary" onclick="render()">好的</button></div>';
     }
   }
   spinAnim = requestAnimationFrame(animate);

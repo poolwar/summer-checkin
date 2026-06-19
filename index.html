@@ -345,7 +345,6 @@ function getLotteryHistory() { return LS.get('lottery_history', []); }
 function getCoupons() { return LS.get('coupons', []); }
 function getUnlocks() { return LS.get('unlocks', []); }
 function getDailyThreshold() { return LS.get('dailyThreshold', 30); }
-function getSpinCost() { return LS.get('spinCost', 30); }
 
 // Calculate earned points and spin deductions for a date
 function getBonusPoints() { return LS.get('bonus_points', {}); }
@@ -361,8 +360,8 @@ function getDayPoints(dateStr) {
   });
   const unlocks = getUnlocks();
   const dayUnlocks = unlocks.filter(u => u.date === dateStr).length;
-  const spinCost = getSpinCost();
-  const spent = dayUnlocks * spinCost;
+  const threshold = getDailyThreshold();
+  const spent = dayUnlocks * threshold;
   const bonus = getBonusPoints()[dateStr] || 0;
   return { earned, spent, bonus, available: Math.max(0, earned - spent + bonus) };
 }
@@ -405,7 +404,6 @@ function render() {
   const history = getLotteryHistory();
 
   const threshold = getDailyThreshold();
-  const spinCost = getSpinCost();
   const todayPts = getDayPoints(currentDate);
   const canLottery = todayPts.available >= threshold;
   const todaySpins = getUnlocks().filter(u => u.date === currentDate).length;
@@ -455,7 +453,7 @@ function render() {
     html += `<div class="card">
       <h2>📅 ${currentDate} ${travelDays.includes(currentDate) ? '✈️ 旅行模式' : ''}</h2>
       <div class="progress-track"><div class="progress-fill${canLottery?' complete':''}" style="width:${pctW}%">${canLottery?'🎰 可抽奖！('+todayPts.available+'分)':todayPts.available+'/'+threshold+'分'}</div></div>
-      <p style="font-size:.7rem;color:var(--text-light);margin:4px 0 8px">${doneCount}/${totalTasks}项 · 总积分上限${maxPts} · 抽奖消耗${spinCost}分${todaySpins>0?' · 今日已抽'+todaySpins+'次':''}</p>`;
+      <p style="font-size:.7rem;color:var(--text-light);margin:4px 0 8px">${doneCount}/${totalTasks}项 · 总积分上限${maxPts} · 抽奖消耗${threshold}分${todaySpins>0?' · 今日已抽'+todaySpins+'次':''}</p>`;
     activeTasks.forEach(t => {
       const key = `${currentDate}_${t.id}`;
       const done = checkins[key]?.status === 'done';
@@ -470,7 +468,7 @@ function render() {
     // Lottery teaser
     if (canLottery) {
       html += `<div class="lottery-teaser" onclick="navTo('lottery')">
-        <span class="teaser-icon">🎰</span><div><strong>积分达标！去抽奖！</strong><p>${todayPts.available}分可用 · 消耗${spinCost}分抽一次</p></div></div>`;
+        <span class="teaser-icon">🎰</span><div><strong>积分达标！去抽奖！</strong><p>${todayPts.available}分可用 · 消耗${threshold}分抽一次</p></div></div>`;
     }
 
     // Coupons
@@ -547,7 +545,7 @@ function render() {
 
     if (dpDaily.available >= threshold) {
       html += `<div class="all-done"><div class="icon">🎰</div><p>积分达标 (${dpDaily.available}/${threshold})！</p>
-        <button class="btn btn-primary" onclick="navTo('lottery')">🎰 去抽奖（消耗${spinCost}分）</button></div>`;
+        <button class="btn btn-primary" onclick="navTo('lottery')">🎰 去抽奖（消耗${threshold}分）</button></div>`;
     }
   }
 
@@ -618,7 +616,7 @@ function render() {
       html += '<div class="wheel-wrap"><canvas id="wheelCanvas" width="320" height="320"></canvas></div>'+
         '<div class="wheel-actions">'+
           (canSpinNow
-            ? '<button class="btn-spin" onclick="spin()">🎰 开始抽奖！（消耗'+spinCost+'分）</button>'
+            ? '<button class="btn-spin" onclick="spin()">🎰 开始抽奖！（消耗'+threshold+'分）</button>'
             : '<div class="cannot-spin">当前'+todayPts.available+'分，需'+threshold+'分才能抽奖'+(todaySpins>0?'（今日已抽'+todaySpins+'次）':'')+'</div>')+
         '</div><div id="spinResult"></div>';
       html += `<div class="card"><h3>奖品列表</h3><div class="prize-list">`;
@@ -670,8 +668,7 @@ function render() {
     // Points settings
     html += '<div class="card"><h3>⭐ 积分规则</h3>';
     html += '<div class="settings-item"><span>🎯 抽奖门槛</span><input type="number" id="thresholdSet" value="'+getDailyThreshold()+'" min="1" max="500" style="margin-left:auto;width:60px;border:1px solid var(--border);border-radius:6px;padding:4px;font-size:.85rem;text-align:center;font-family:inherit" onchange="setThreshold(this.value)"><span style="font-size:.75rem">分</span></div>';
-    html += '<div class="settings-item"><span>🎰 每次抽奖消耗</span><input type="number" id="spinCostSet" value="'+getSpinCost()+'" min="1" max="500" style="margin-left:auto;width:60px;border:1px solid var(--border);border-radius:6px;padding:4px;font-size:.85rem;text-align:center;font-family:inherit" onchange="setSpinCost(this.value)"><span style="font-size:.75rem">分</span></div>';
-    html += '<p style="font-size:.7rem;color:var(--text-light);margin-top:4px">当天累计积分 ≥ 门槛 → 可抽奖。抽一次扣消耗分，剩余积分够可以继续抽</p>';
+    html += '<p style="font-size:.7rem;color:var(--text-light);margin-top:4px">积分 ≥ 门槛 → 解锁抽奖。抽一次扣掉门槛分，继续攒够可以再抽。</p>';
     html += '</div>';
 
     html += `<div class="card"><h3>🎁 奖品配置</h3><p style="font-size:.75rem;color:var(--text-light);margin-bottom:4px">编辑奖品名称、图标和概率</p>`;
@@ -1166,13 +1163,6 @@ function setThreshold(val) {
   render();
 }
 
-function setSpinCost(val) {
-  const num = parseInt(val);
-  if (isNaN(num) || num < 1) return;
-  LS.set('spinCost', num);
-  render();
-}
-
 function addTask() {
   const nameEl = document.getElementById('newName');
   const iconEl = document.getElementById('newIcon');
@@ -1214,7 +1204,6 @@ function exportData() {
     coupons: getCoupons(),
     unlocks: getUnlocks(),
     dailyThreshold: getDailyThreshold(),
-    spinCost: getSpinCost(),
     bonusPoints: getBonusPoints(),
     exported: new Date().toISOString(),
   };
@@ -1241,7 +1230,7 @@ function importData(input) {
       if (data.coupons) setCoupons(data.coupons);
       if (data.unlocks) setUnlocks(data.unlocks);
       if (data.dailyThreshold) LS.set('dailyThreshold', data.dailyThreshold);
-      if (data.spinCost) LS.set('spinCost', data.spinCost);
+      if (data.dailyThreshold) LS.set('dailyThreshold', data.dailyThreshold);
       if (data.bonusPoints) LS.set('bonus_points', data.bonusPoints);
       showMsg('📥 数据已导入', 'ok');
     } catch(e) {
@@ -1284,7 +1273,6 @@ function scheduleBackup() {
         coupons: getCoupons(),
         unlocks: getUnlocks(),
         dailyThreshold: getDailyThreshold(),
-        spinCost: getSpinCost(),
         bonusPoints: getBonusPoints(),
         saved: new Date().toISOString(),
       };
@@ -1319,7 +1307,7 @@ function restoreAutoBackup() {
     if (data.coupons) setCoupons(data.coupons);
     if (data.unlocks) setUnlocks(data.unlocks);
     if (data.dailyThreshold) LS.set('dailyThreshold', data.dailyThreshold);
-    if (data.spinCost) LS.set('spinCost', data.spinCost);
+    if (data.dailyThreshold) LS.set('dailyThreshold', data.dailyThreshold);
     if (data.bonusPoints) LS.set('bonus_points', data.bonusPoints);
     return true;
   } catch(e) { return false; }
@@ -1343,7 +1331,7 @@ setTasks = function(v) { _setTasks(v); scheduleBackup(); };
 setBonusPoints = function(v) { _setBonusPoints(v); scheduleBackup(); };
 LS.set = function(k, v) {
   localStorage.setItem(k, JSON.stringify(v));
-  if (['tasks','prizes','checkins','travel_days','lottery_history','coupons','unlocks','dailyThreshold','spinCost','bonus_points'].includes(k)) {
+  if (['tasks','prizes','checkins','travel_days','lottery_history','coupons','unlocks','dailyThreshold','bonus_points'].includes(k)) {
     scheduleBackup();
   }
 };
@@ -1377,7 +1365,7 @@ openDB().then(() => {
       tasks: getTasks(), prizes: getPrizes(), checkins: getCheckins(),
       travelDays: getTravelDays(), lotteryHistory: getLotteryHistory(),
       coupons: getCoupons(), unlocks: getUnlocks(),
-      dailyThreshold: getDailyThreshold(), spinCost: getSpinCost(),
+      dailyThreshold: getDailyThreshold(),
       bonusPoints: getBonusPoints(), saved: new Date().toISOString(),
     };
     try { localStorage.setItem('_autobackup', JSON.stringify(data)); } catch(e) {}
@@ -1404,7 +1392,7 @@ function handleStartupImport(input) {
       if (data.coupons) setCoupons(data.coupons);
       if (data.unlocks) setUnlocks(data.unlocks);
       if (data.dailyThreshold) LS.set('dailyThreshold', data.dailyThreshold);
-      if (data.spinCost) LS.set('spinCost', data.spinCost);
+      if (data.dailyThreshold) LS.set('dailyThreshold', data.dailyThreshold);
       if (data.bonusPoints) LS.set('bonus_points', data.bonusPoints);
       scheduleBackup();
       render();

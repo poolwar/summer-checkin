@@ -366,6 +366,23 @@ function getDayPoints(dateStr) {
   return { earned, spent, bonus, available: Math.max(0, earned - spent + bonus) };
 }
 
+// Pooled available for lottery: today + past 3 days' earned + bonus - today's spins
+function getAvailableForLottery() {
+  let totalEarned = 0, totalBonus = 0;
+  const range = allowedDateRange();
+  let d = new Date(range.min + 'T00:00:00');
+  const end = new Date(range.max + 'T00:00:00');
+  while (d <= end) {
+    const ds = d.toISOString().slice(0, 10);
+    totalEarned += getDayPoints(ds).earned;
+    totalBonus += getBonusPoints()[ds] || 0;
+    d.setDate(d.getDate() + 1);
+  }
+  const todaySpins = getUnlocks().filter(u => u.date === today()).length;
+  const spent = todaySpins * getDailyThreshold();
+  return Math.max(0, totalEarned + totalBonus - spent);
+}
+
 function setCheckins(v) { LS.set('checkins', v); }
 function setTravelDays(v) { LS.set('travel_days', v); }
 function setLotteryHistory(v) { LS.set('lottery_history', v); }
@@ -405,8 +422,9 @@ function render() {
 
   const threshold = getDailyThreshold();
   const todayPts = getDayPoints(currentDate);
-  const canLottery = todayPts.available >= threshold;
-  const todaySpins = getUnlocks().filter(u => u.date === currentDate).length;
+  const pooledPts = getAvailableForLottery();
+  const canLottery = pooledPts >= threshold;
+  const todaySpins = getUnlocks().filter(u => u.date === today()).length;
 
   // Streak calc (at least threshold points earned per day)
   let streak = 0;
@@ -441,18 +459,18 @@ function render() {
     html += `<div class="stats">
       <div class="stat"><span class="stat-icon">🔥</span><span class="stat-val">${streak}</span><span class="stat-lbl">连续打卡</span></div>
       <div class="stat"><span class="stat-icon">🎫</span><span class="stat-val">${coupons.filter(c=>!c.used).length}</span><span class="stat-lbl">免做券</span></div>
-      <div class="stat"><span class="stat-icon">⭐</span><span class="stat-val">${todayPts.available}</span><span class="stat-lbl">今日积分</span></div>
+      <div class="stat"><span class="stat-icon">⭐</span><span class="stat-val">${pooledPts}</span><span class="stat-lbl">今日积分</span></div>
     </div>`;
 
     // Today card
     const maxPts = activeTasks.reduce((s,t) => s + (t.points||0), 0);
-    const pctW = maxPts > 0 ? Math.min(100, (todayPts.available / threshold) * 100) : 0;
+    const pctW = maxPts > 0 ? Math.min(100, (pooledPts / threshold) * 100) : 0;
     const totalTasks = activeTasks.length;
     let doneCount = 0;
     activeTasks.forEach(t => { if (checkins[currentDate+'_'+t.id]?.status === 'done') doneCount++; });
     html += `<div class="card">
       <h2>📅 ${currentDate} ${travelDays.includes(currentDate) ? '✈️ 旅行模式' : ''}</h2>
-      <div class="progress-track"><div class="progress-fill${canLottery?' complete':''}" style="width:${pctW}%">${canLottery?'🎰 可抽奖！('+todayPts.available+'分)':todayPts.available+'/'+threshold+'分'}</div></div>
+      <div class="progress-track"><div class="progress-fill${canLottery?' complete':''}" style="width:${pctW}%">${canLottery?'🎰 可抽奖！('+pooledPts+'分)':pooledPts+'/'+threshold+'分'}</div></div>
       <p style="font-size:.7rem;color:var(--text-light);margin:4px 0 8px">${doneCount}/${totalTasks}项 · 总积分上限${maxPts} · 抽奖消耗${threshold}分${todaySpins>0?' · 今日已抽'+todaySpins+'次':''}</p>`;
     activeTasks.forEach(t => {
       const key = `${currentDate}_${t.id}`;
@@ -468,7 +486,7 @@ function render() {
     // Lottery teaser
     if (canLottery) {
       html += `<div class="lottery-teaser" onclick="navTo('lottery')">
-        <span class="teaser-icon">🎰</span><div><strong>积分达标！去抽奖！</strong><p>${todayPts.available}分可用 · 消耗${threshold}分抽一次</p></div></div>`;
+        <span class="teaser-icon">🎰</span><div><strong>积分达标！去抽奖！</strong><p>${pooledPts}分可用 · 消耗${threshold}分抽一次</p></div></div>`;
     }
 
     // Coupons
@@ -493,9 +511,13 @@ function render() {
       <button onclick="changeDate(1)"${canGoFwd?'':' disabled style="opacity:0.3;cursor:not-allowed"'} title="${canGoFwd?'向后翻':'今天是最新的日期'}">▶</button></div>`;
 
     const dpDaily = getDayPoints(currentDate);
+    const isToday = currentDate === today();
+    const poolAvail2 = isToday ? getAvailableForLottery() : dpDaily.available;
     html += `<div class="mini-progress"><span>⭐ ${dpDaily.available}分</span>
-      <div class="bar"><div class="fill" style="width:${Math.min(100,(dpDaily.available/threshold)*100)}%"></div></div>
-      <span>${dpDaily.available >= threshold ? '🎰 可抽奖' : '还需'+(threshold-dpDaily.available)+'分'}</span></div>`;
+      <div class="bar"><div class="fill" style="width:${Math.min(100,(poolAvail2/threshold)*100)}%"></div></div>
+      <span>${poolAvail2 >= threshold ? '🎰 可抽奖' : '还需'+(threshold-poolAvail2)+'分'}</span>
+      ${isToday && dpDaily.available !== poolAvail2 ? '<small style="font-size:.65rem;color:var(--text-light)">（含补卡积分）</small>' : ''}
+      </div>`;
 
     activeTasks.forEach(t => {
       const key = `${currentDate}_${t.id}`;
@@ -543,8 +565,9 @@ function render() {
       html += `</div>`;
     });
 
-    if (dpDaily.available >= threshold && currentDate === today()) {
-      html += `<div class="all-done"><div class="icon">🎰</div><p>积分达标 (${dpDaily.available}/${threshold})！</p>
+    const poolAvail = getAvailableForLottery();
+    if (poolAvail >= threshold && currentDate === today()) {
+      html += `<div class="all-done"><div class="icon">🎰</div><p>积分达标 (${poolAvail}/${threshold})！</p>
         <button class="btn btn-primary" onclick="navTo('lottery')">🎰 去抽奖（消耗${threshold}分）</button></div>`;
     }
   }
@@ -604,10 +627,10 @@ function render() {
       <button class="${tab==='history'?'active':''}" onclick="setLotteryTab('history')">📋 抽奖记录</button></div>`;
 
     if (tab === 'wheel') {
-      const canSpinNow = todayPts.available >= threshold;
+      const canSpinNow = pooledPts >= threshold;
       const bp = todayPts.bonus || 0;
       html += '<div class="card" style="text-align:center;margin-bottom:8px"><div style="display:flex;justify-content:space-around">'+
-        '<div><span style="font-size:1.5rem;font-weight:800;color:var(--primary)">'+todayPts.available+'</span><br><span style="font-size:.7rem;color:var(--text-light)">可用积分</span></div>'+
+        '<div><span style="font-size:1.5rem;font-weight:800;color:var(--primary)">'+pooledPts+'</span><br><span style="font-size:.7rem;color:var(--text-light)">可用积分</span></div>'+
         '<div><span style="font-size:1rem">🎯</span><br><span style="font-size:.7rem;color:var(--text-light)">门槛 '+threshold+'</span></div>'+
         '<div><span style="font-size:1rem">'+(todayPts.earned||0)+'</span><br><span style="font-size:.7rem;color:var(--text-light)">任务积分</span></div>'+
         (bp>0?'<div><span style="font-size:1rem;color:var(--success)">+'+bp+'</span><br><span style="font-size:.7rem;color:var(--text-light)">抽奖积分</span></div>':'')+
@@ -617,7 +640,7 @@ function render() {
         '<div class="wheel-actions">'+
           (canSpinNow
             ? '<button class="btn-spin" onclick="spin()">🎰 开始抽奖！（消耗'+threshold+'分）</button>'
-            : '<div class="cannot-spin">当前'+todayPts.available+'分，需'+threshold+'分才能抽奖'+(todaySpins>0?'（今日已抽'+todaySpins+'次）':'')+'</div>')+
+            : '<div class="cannot-spin">当前'+pooledPts+'分，需'+threshold+'分才能抽奖'+(todaySpins>0?'（今日已抽'+todaySpins+'次）':'')+'</div>')+
         '</div><div id="spinResult"></div>';
       html += `<div class="card"><h3>奖品列表</h3><div class="prize-list">`;
       prizes.forEach(p => {
@@ -813,10 +836,9 @@ function drawWheel(rotation) {
 }
 
 function spin() {
-  // Only spin for today
-  const todayPts = getDayPoints(today());
-  if (todayPts.available < getDailyThreshold()) {
-    showMsg('今日积分不足，无法抽奖', 'err');
+  // Only spin for today, use pooled points (today + past 3 days makeup)
+  if (getAvailableForLottery() < getDailyThreshold()) {
+    showMsg('可用积分不足（含补卡共需'+getDailyThreshold()+'分），无法抽奖', 'err');
     return;
   }
   const prizes = getPrizes();

@@ -364,7 +364,7 @@ function getDayPoints(dateStr) {
   const spinCost = getSpinCost();
   const spent = dayUnlocks * spinCost;
   const bonus = getBonusPoints()[dateStr] || 0;
-  return { earned, spent, bonus, available: earned - spent + bonus };
+  return { earned, spent, bonus, available: Math.max(0, earned - spent + bonus) };
 }
 
 function setCheckins(v) { LS.set('checkins', v); }

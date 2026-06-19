@@ -193,6 +193,27 @@ nav.bottom-nav{
 .result-name{font-size:1.2rem;font-weight:700;margin:14px 0 10px;color:var(--primary)}
 .result-hint{color:var(--text-light);font-size:.8rem;margin-bottom:18px}
 .wheel-canvas{max-width:100%;height:auto;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.15))}
+
+/* ===== Marquee ===== */
+.marquee-box{position:relative;width:100%;height:120px;overflow:hidden;background:#fff;border-radius:16px;box-shadow:var(--shadow);margin:10px 0}
+.marquee-track{display:flex;gap:4px;padding:16px 120px;white-space:nowrap;will-change:transform}
+.marquee-item{flex-shrink:0;width:70px;height:88px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:700;transition:all .3s}
+.marquee-item span{font-size:1.8rem}
+.marquee-item small{font-size:.55rem;text-align:center;line-height:1.2;margin-top:2px}
+.marquee-item.winner{transform:scale(1.2);box-shadow:0 0 20px rgba(255,215,0,0.8);z-index:2;border:3px solid #FFD700}
+.marquee-pointer{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.5rem;color:#E8845C;z-index:3;pointer-events:none;text-shadow:0 2px 4px rgba(0,0,0,0.2);background:rgba(255,255,255,0.8);width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+
+/* ===== Blind Box ===== */
+.blind-box{padding:10px 0}
+.blind-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.blind-item{aspect-ratio:1;background:linear-gradient(135deg,#FFF8E5,#FFF0D0);border:2px dashed #D4A54A;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .3s;user-select:none}
+.blind-item:active{transform:scale(.95)}
+.blind-item span{font-size:2rem}
+.blind-item small{font-size:.6rem;color:#8B7D4A;margin-top:4px}
+.blind-highlight{background:#FFE0B2;border-color:#FF9800;transform:scale(1.05);box-shadow:0 0 20px rgba(255,152,0,0.4)}
+.blind-open{background:#fff;border:3px solid #FFD700;animation:popIn .5s}
+.blind-open span{font-size:2.5rem;animation:bounce .4s infinite alternate}
+.blind-open small{color:var(--primary);font-weight:700}
 .prize-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}
 .prize-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#fff;
   border-radius:10px;font-size:.75rem}
@@ -638,38 +659,25 @@ function render() {
 
   else if (currentView === 'lottery') {
     const tab = LS.get('lottery_tab', 'wheel');
-    html += `<div class="tabs">
-      <button class="${tab==='wheel'?'active':''}" onclick="setLotteryTab('wheel')">🎰 转轮盘</button>
-      <button class="${tab==='history'?'active':''}" onclick="setLotteryTab('history')">📋 抽奖记录</button></div>`;
+    const mode = LS.get('lottery_mode', 'wheel');
+    const canSpinNow = pooledPts >= threshold;
+    const bp = todayPts.bonus || 0;
 
-    if (tab === 'wheel') {
-      const canSpinNow = pooledPts >= threshold;
-      const bp = todayPts.bonus || 0;
-      html += '<div class="card" style="text-align:center;margin-bottom:8px"><div style="display:flex;justify-content:space-around">'+
-        '<div><span style="font-size:1.5rem;font-weight:800;color:var(--primary)">'+pooledPts+'</span><br><span style="font-size:.7rem;color:var(--text-light)">可用积分</span></div>'+
-        '<div><span style="font-size:1rem">🎯</span><br><span style="font-size:.7rem;color:var(--text-light)">门槛 '+threshold+'</span></div>'+
-        '<div><span style="font-size:1rem">'+(todayPts.earned||0)+'</span><br><span style="font-size:.7rem;color:var(--text-light)">任务积分</span></div>'+
-        (bp>0?'<div><span style="font-size:1rem;color:var(--success)">+'+bp+'</span><br><span style="font-size:.7rem;color:var(--text-light)">抽奖积分</span></div>':'')+
-        '<div><span style="font-size:1rem">🎰×'+(todaySpins||0)+'</span><br><span style="font-size:.7rem;color:var(--text-light)">已抽次数</span></div>'+
-        '</div></div>';
-      html += '<div class="wheel-wrap"><canvas id="wheelCanvas" width="380" height="380"></canvas></div>'+
-        '<div class="wheel-actions">'+
-          (canSpinNow
-            ? '<button class="btn-spin" onclick="spin()">🎰 开始抽奖！（消耗'+threshold+'分）</button>'
-            : '<div class="cannot-spin">当前'+pooledPts+'分，需'+threshold+'分才能抽奖'+(todaySpins>0?'（今日已抽'+todaySpins+'次）':'')+'</div>')+
-        '</div><div id="spinResult"></div>';
-      html += `<div class="card"><h3>奖品列表</h3><div class="prize-list">`;
-      prizes.forEach(p => {
-        html += `<div class="prize-item"><span>${p.icon}</span><span>${p.name}</span><span class="prob">${Math.round(p.prob*100)}%</span></div>`;
-      });
-      html += `</div></div>`;
-    } else {
+    // Mode selector
+    html += '<div class="tabs" style="margin-bottom:10px">'+
+      '<button class="'+(mode==='wheel'?'active':'')+'" onclick="setLotteryMode(\'wheel\')" style="font-size:.75rem">🎰 转盘</button>'+
+      '<button class="'+(mode==='marquee'?'active':'')+'" onclick="setLotteryMode(\'marquee\')" style="font-size:.75rem">🏇 跑马灯</button>'+
+      '<button class="'+(mode==='blind'?'active':'')+'" onclick="setLotteryMode(\'blind\')" style="font-size:.75rem">🎁 盲盒</button>'+
+      '<button class="'+(tab==='history'?'active':'')+'" onclick="setLotteryTab(\'history\')" style="font-size:.75rem">📋 记录</button>'+
+      '</div>';
+
+    if (tab === 'history') {
       if (history.length === 0) {
-        html += `<div class="empty-msg">还没有抽奖记录，快去完成打卡抽奖吧！</div>`;
+        html += '<div class="empty-msg">还没有抽奖记录，快去完成打卡抽奖吧！</div>';
       } else {
         history.slice().reverse().forEach(h => {
-          const isBig = ['大餐','玩具','礼物'].includes(h.name);
-          let actionHtml = '<span style="color:var(--text-light);font-size:.75rem">自动生效</span>';
+          var isBig = ['大餐','玩具','礼物'].includes(h.name) || h.name.includes('礼物');
+          var actionHtml = '<span style="color:var(--text-light);font-size:.75rem">自动生效</span>';
           if (isBig) {
             actionHtml = h.redeemed
               ? '<span style="color:var(--success);font-size:.75rem">✅ 已兑换</span>'
@@ -678,6 +686,37 @@ function render() {
           html += '<div class="history-item"><span class="h-icon">'+h.icon+'</span><div class="h-info"><strong>'+h.name+'</strong><span class="h-date">'+h.date+'</span></div>'+actionHtml+'</div>';
         });
       }
+    } else {
+      // Points bar
+      html += '<div class="card" style="text-align:center;margin-bottom:8px"><div style="display:flex;justify-content:space-around">'+
+        '<div><span style="font-size:1.5rem;font-weight:800;color:var(--primary)">'+pooledPts+'</span><br><span style="font-size:.7rem;color:var(--text-light)">可用积分</span></div>'+
+        '<div><span style="font-size:1rem">🎯</span><br><span style="font-size:.7rem;color:var(--text-light)">门槛 '+threshold+'</span></div>'+
+        '<div><span style="font-size:1rem">'+(todayPts.earned||0)+'</span><br><span style="font-size:.7rem;color:var(--text-light)">任务积分</span></div>'+
+        (bp>0?'<div><span style="font-size:1rem;color:var(--success)">+'+bp+'</span><br><span style="font-size:.7rem;color:var(--text-light)">抽奖积分</span></div>':'')+
+        '<div><span style="font-size:1rem">🎰×'+(todaySpins||0)+'</span><br><span style="font-size:.7rem;color:var(--text-light)">已抽次数</span></div>'+
+        '</div></div>';
+
+      // Game area
+      if (mode === 'wheel') {
+        html += '<div class="wheel-wrap"><canvas id="wheelCanvas" width="380" height="380"></canvas></div>';
+      } else if (mode === 'marquee') {
+        html += '<div id="marqueeBox" class="marquee-box">'+buildMarqueeHTML(prizes)+'</div>';
+      } else if (mode === 'blind') {
+        html += '<div id="blindBox" class="blind-box">'+buildBlindHTML(prizes.length)+'</div>';
+      }
+
+      html += '<div class="wheel-actions">'+
+        (canSpinNow
+          ? '<button class="btn-spin" onclick="spinGame()">'+(mode==='wheel'?'🎰':mode==='marquee'?'🏇':'🎁')+' 开始抽奖！（消耗'+threshold+'分）</button>'
+          : '<div class="cannot-spin">当前'+pooledPts+'分，需'+threshold+'分才能抽奖'+(todaySpins>0?'（今日已抽'+todaySpins+'次）':'')+'</div>')+
+        '</div><div id="spinResult"></div>';
+
+      // Prize list
+      html += '<div class="card"><h3>奖品列表</h3><div class="prize-list">';
+      prizes.forEach(p => {
+        html += '<div class="prize-item"><span>'+p.icon+'</span><span>'+p.name+'</span><span class="prob">'+Math.round(p.prob*100)+'%</span></div>';
+      });
+      html += '</div></div>';
     }
   }
 
@@ -775,7 +814,7 @@ function render() {
   app.innerHTML = html;
 
   // Defer: render wheel canvas + load photo thumbs
-  if (currentView === 'lottery' && LS.get('lottery_tab','wheel')==='wheel') {
+  if (currentView === 'lottery' && LS.get('lottery_tab','game')!=='history' && LS.get('lottery_mode','wheel')==='wheel') {
     setTimeout(() => drawWheel(0), 50);
   }
   if (currentView === 'daily') {
@@ -1021,53 +1060,8 @@ function spin() {
     drawWheel(spinAngle);
     if (progress < 1) spinAnim = requestAnimationFrame(animate);
     else {
-      // Confetti!
-      spawnConfetti();
-
-      const spinDate = today();
-      const history = getLotteryHistory();
-      history.push({ id: Date.now(), name: selectedPrize.name, icon: selectedPrize.icon, date: spinDate, redeemed: false });
-      setLotteryHistory(history);
-
-      const unlocks = getUnlocks();
-      unlocks.push({ date: spinDate, id: Date.now() });
-      setUnlocks(unlocks);
-
-      if (selectedPrize.name.includes('免练字')) {
-        const coupons = getCoupons();
-        coupons.push({ id: Date.now(), taskName: '语文练字', wonDate: spinDate, used: false });
-        setCoupons(coupons);
-      } else if (selectedPrize.name.includes('免体能')) {
-        const coupons = getCoupons();
-        coupons.push({ id: Date.now(), taskName: '体能训练', wonDate: spinDate, used: false });
-        setCoupons(coupons);
-      }
-
-      let bonusEarned = 0;
-      const match = selectedPrize.name.match(/积分\+(\d+)/);
-      if (match) {
-        bonusEarned = parseInt(match[1]);
-        const bp = getBonusPoints();
-        bp[spinDate] = (bp[spinDate] || 0) + bonusEarned;
-        setBonusPoints(bp);
-      }
-
-      var isBig = ['大餐','玩具','礼物'].includes(selectedPrize.name) || selectedPrize.name.includes('礼物');
-      var isSkip = selectedPrize.name.includes('免');
-      var isSorry = selectedPrize.name === '谢谢参与';
-      var resultClass = isBig ? 'big-prize' : isSorry ? 'sorry' : 'normal-prize';
-      var hint = isBig ? '🎉 恭喜！请找家长兑换！' :
-        isSkip ? '🎫 免做券已发放' :
-        isSorry ? '😅 再接再厉！' :
-        bonusEarned > 0 ? '⭐ +'+bonusEarned+'积分已到账！' : '⭐ 积分已累计！';
-
-      document.getElementById('spinResult').innerHTML =
-        '<div class="spin-result '+resultClass+'">'+
-        '<div class="result-glow"></div>'+
-        '<div class="result-icon">'+selectedPrize.icon+'</div>'+
-        '<div class="result-name">'+selectedPrize.name+'</div>'+
-        '<p class="result-hint">'+hint+'</p>'+
-        '<button class="btn btn-primary" onclick="render()">好的</button></div>';
+      recordSpin(selectedPrize);
+      showPrizeResult(selectedPrize);
     }
   }
   spinAnim = requestAnimationFrame(animate);
@@ -1228,6 +1222,168 @@ function changeCalMonth(delta) {
 function setLotteryTab(tab) {
   LS.set('lottery_tab', tab);
   render();
+}
+
+function setLotteryMode(mode) {
+  LS.set('lottery_mode', mode);
+  LS.set('lottery_tab', 'game');
+  render();
+}
+
+// ===== MARQUEE GAME =====
+function buildMarqueeHTML(prizes) {
+  var h = '<div class="marquee-track" id="marqueeTrack">';
+  // Repeat prizes 3x for seamless scrolling
+  for (var r = 0; r < 3; r++) {
+    for (var i = 0; i < prizes.length; i++) {
+      h += '<div class="marquee-item" style="background:'+WHEEL_COLORS[i%WHEEL_COLORS.length][0]+'"><span>'+prizes[i].icon+'</span><small>'+prizes[i].name+'</small></div>';
+    }
+  }
+  h += '</div><div class="marquee-pointer">▼</div>';
+  return h;
+}
+
+// ===== BLIND BOX GAME =====
+function buildBlindHTML(count) {
+  var boxes = Math.max(6, Math.min(count, 12));
+  var h = '<div class="blind-grid">';
+  var emojis = ['🎁','🎀','🎊','🎉','🎈','✨','💝','🎪','🎯','🏆','💎','🌟'];
+  for (var i = 0; i < boxes; i++) {
+    h += '<div class="blind-item" onclick="pickBlind('+i+')" id="blind'+i+'"><span>'+emojis[i%emojis.length]+'</span><small>点击开启</small></div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+// ===== SPIN DISPATCHER =====
+function spinGame() {
+  if (getAvailableForLottery() < getDailyThreshold()) {
+    showMsg('积分不足', 'err'); return;
+  }
+  var mode = LS.get('lottery_mode', 'wheel');
+  if (mode === 'wheel') spin();
+  else if (mode === 'marquee') spinMarquee();
+  else if (mode === 'blind') spinBlind();
+}
+
+function pickRandomPrize() {
+  var prizes = getPrizes();
+  var totalProb = prizes.reduce(function(s,p){return s+p.prob;}, 0);
+  var r = Math.random() * totalProb;
+  for (var i = 0; i < prizes.length; i++) {
+    r -= prizes[i].prob;
+    if (r <= 0) return prizes[i];
+  }
+  return prizes[prizes.length-1];
+}
+
+function recordSpin(prize) {
+  var spinDate = today();
+  var history = getLotteryHistory();
+  history.push({id:Date.now(), name:prize.name, icon:prize.icon, date:spinDate, redeemed:false});
+  setLotteryHistory(history);
+  var unlocks = getUnlocks();
+  unlocks.push({date:spinDate, id:Date.now()});
+  setUnlocks(unlocks);
+  if (prize.name.includes('免练字')) {
+    var coupons = getCoupons();
+    coupons.push({id:Date.now(), taskName:'语文练字', wonDate:spinDate, used:false});
+    setCoupons(coupons);
+  } else if (prize.name.includes('免体能')) {
+    var coupons = getCoupons();
+    coupons.push({id:Date.now(), taskName:'体能训练', wonDate:spinDate, used:false});
+    setCoupons(coupons);
+  }
+  var match = prize.name.match(/积分\+(\d+)/);
+  if (match) {
+    var bonusEarned = parseInt(match[1]);
+    var bp = getBonusPoints();
+    bp[spinDate] = (bp[spinDate]||0) + bonusEarned;
+    setBonusPoints(bp);
+  }
+  return prize;
+}
+
+function showPrizeResult(prize) {
+  var bonusEarned = 0;
+  var m = prize.name.match(/积分\+(\d+)/);
+  if (m) bonusEarned = parseInt(m[1]);
+  var isBig = ['大餐','玩具','礼物'].includes(prize.name) || prize.name.includes('礼物');
+  var isSkip = prize.name.includes('免');
+  var isSorry = prize.name === '谢谢参与';
+  var hint = isBig ? '🎉 恭喜！请找家长兑换！' :
+    isSkip ? '🎫 免做券已发放' :
+    isSorry ? '😅 再接再厉！' :
+    bonusEarned > 0 ? '⭐ +'+bonusEarned+'积分已到账！' : '⭐ 积分已累计！';
+  spawnConfetti();
+  document.getElementById('spinResult').innerHTML =
+    '<div class="spin-result'+(isBig?' big-prize':'')+'"><div class="result-glow"></div>'+
+    '<div class="result-icon">'+prize.icon+'</div>'+
+    '<div class="result-name">'+prize.name+'</div>'+
+    '<p class="result-hint">'+hint+'</p>'+
+    '<button class="btn btn-primary" onclick="render()">好的</button></div>';
+}
+
+// ===== MARQUEE (跑马灯) =====
+var marqueeAnim = null;
+function spinMarquee() {
+  var prize = pickRandomPrize();
+  recordSpin(prize);
+  var track = document.getElementById('marqueeTrack');
+  if (!track) return;
+  var prizes = getPrizes();
+  var itemWidth = track.firstChild ? track.firstChild.offsetWidth + 4 : 80;
+  var targetIdx = prizes.indexOf(prize);
+  // The winning item is in the second repetition
+  var winIdx = prizes.length + targetIdx;
+  var targetPos = -(winIdx * itemWidth) + 120; // Center the winner
+
+  track.style.transition = 'none';
+  track.style.transform = 'translateX(0)';
+  track.offsetHeight; // reflow
+  track.style.transition = 'transform 4s cubic-bezier(0.1, 0.8, 0.2, 1)';
+  track.style.transform = 'translateX('+(targetPos - 300)+'px)';
+
+  // Highlight winner after animation
+  setTimeout(function(){
+    var items = track.querySelectorAll('.marquee-item');
+    items.forEach(function(el){ el.classList.remove('winner'); });
+    if (items[winIdx]) items[winIdx].classList.add('winner');
+    showPrizeResult(prize);
+  }, 4200);
+}
+
+// ===== BLIND BOX (盲盒) =====
+var blindPicked = false;
+function spinBlind() {
+  if (blindPicked) return;
+  blindPicked = true;
+  var prize = pickRandomPrize();
+  recordSpin(prize);
+  var boxes = document.querySelectorAll('.blind-item');
+  boxes.forEach(function(b){ b.style.pointerEvents = 'none'; });
+
+  // Shuffle animation
+  var shuffles = 0;
+  var maxShuffles = 12;
+  var shuffleInterval = setInterval(function(){
+    var hi = Math.floor(Math.random() * boxes.length);
+    boxes.forEach(function(b){ b.classList.remove('blind-highlight'); });
+    boxes[hi].classList.add('blind-highlight');
+    shuffles++;
+    if (shuffles >= maxShuffles) {
+      clearInterval(shuffleInterval);
+      // Open winning box
+      var winBox = boxes[Math.floor(Math.random() * boxes.length)];
+      winBox.classList.add('blind-open');
+      winBox.querySelector('span').textContent = prize.icon;
+      winBox.querySelector('small').textContent = prize.name;
+      setTimeout(function(){
+        showPrizeResult(prize);
+        blindPicked = false;
+      }, 800);
+    }
+  }, 200);
 }
 
 function redeemPrize(id) {

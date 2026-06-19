@@ -69,7 +69,7 @@ nav.bottom-nav{
 }
 .task-item:active{transform:scale(.98)}
 .task-item.done{background:#F4FAF6;border-color:#C8E6D0;opacity:.85}
-.task-item .task-emoji{font-size:1.2rem}
+.task-item .task-emoji{font-size:1.2rem;width:1.4em;height:1.4em;vertical-align:middle;object-fit:contain;border-radius:4px}
 .task-item .task-name{flex:1;font-weight:500;font-size:.85rem}
 .task-item .task-badge{font-size:1rem;flex-shrink:0}
 
@@ -194,17 +194,19 @@ nav.bottom-nav{
 .result-hint{color:var(--text-light);font-size:.8rem;margin-bottom:18px}
 .wheel-canvas{max-width:100%;height:auto;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.15))}
 
-/* ===== Marquee Racetrack ===== */
-.marquee-box{position:relative;width:100%;height:200px;overflow:hidden;background:linear-gradient(180deg,#7CB342 0%,#8BC34A 30%,#9CCC65 50%,#8BC34A 70%,#7CB342 100%);border-radius:16px;box-shadow:var(--shadow);margin:10px 0;border:4px solid #558B2F}
-.marquee-box::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:repeating-linear-gradient(0deg,transparent,transparent 32px,rgba(255,255,255,0.15) 32px,rgba(255,255,255,0.15) 34px);pointer-events:none;z-index:0}
-.marquee-track{display:flex;gap:0;padding:20px 160px;white-space:nowrap;will-change:transform;position:relative;z-index:1}
-.marquee-item{flex-shrink:0;width:80px;min-height:140px;border-radius:16px 16px 8px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:700;transition:all .3s;margin:0 6px;position:relative;border:3px solid rgba(255,255,255,0.4);text-shadow:0 1px 3px rgba(0,0,0,0.3)}
-.marquee-item::after{content:'';position:absolute;bottom:-8px;width:30px;height:12px;background:rgba(0,0,0,0.3);border-radius:50%}
-.marquee-item span{font-size:2rem;filter:drop-shadow(0 2px 2px rgba(0,0,0,0.2))}
-.marquee-item small{font-size:.6rem;text-align:center;line-height:1.2;margin-top:4px;max-width:70px;word-break:break-all}
-.marquee-item.winner{transform:scale(1.25);box-shadow:0 0 30px rgba(255,215,0,1),0 0 60px rgba(255,215,0,0.6);z-index:5;border:4px solid #FFD700;animation:winnerBounce .2s infinite alternate}
-@keyframes winnerBounce{from{transform:scale(1.25) translateY(0)}to{transform:scale(1.25) translateY(-8px)}}
-.marquee-finish{position:absolute;top:0;left:50%;transform:translateX(-50%);width:6px;height:100%;background:repeating-linear-gradient(0deg,#fff 0,#fff 16px,#000 16px,#000 32px);z-index:4;box-shadow:0 0 10px rgba(0,0,0,0.3)}
+/* ===== Racetrack 100m ===== */
+.marquee-box{position:relative;width:100%;height:auto;min-height:280px;overflow:hidden;background:linear-gradient(180deg,#E8D5B0 0%,#D4A574 3%,#C4956A 6%,#E8B890 10%,#E8B890 90%,#C4956A 94%,#D4A574 97%,#E8D5B0 100%);border-radius:16px;box-shadow:var(--shadow);margin:10px 0;border:3px solid #8B6914;padding:15px 0}
+.race-stadium{position:relative;width:100%;min-height:250px}
+.race-lane{position:relative;height:28px;display:flex;align-items:center;margin:0 8px;border-bottom:1px dashed rgba(255,255,255,0.4)}
+.race-runner{position:absolute;left:0;top:-4px;font-size:1.6rem;transition:none;z-index:2;filter:drop-shadow(0 2px 2px rgba(0,0,0,0.3));width:32px;text-align:center}
+.race-runner-label{position:absolute;left:36px;top:0;font-size:.55rem;color:#fff;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,0.5);white-space:nowrap;transition:none}
+.race-runner.winner{font-size:2.2rem;z-index:10;animation:winnerBounce .2s infinite alternate}
+@keyframes winnerBounce{from{transform:translateY(0)}to{transform:translateY(-8px)}}
+.race-finish{position:absolute;top:0;right:8px;width:6px;height:100%;background:repeating-linear-gradient(0deg,#fff 0,#fff 10px,#000 10px,#000 20px);z-index:5;border-radius:2px}
+.race-start{position:absolute;top:0;left:8px;width:4px;height:100%;background:rgba(255,255,255,0.8);z-index:5;border-radius:2px}
+.race-label{position:absolute;font-size:.5rem;color:rgba(255,255,255,0.7);font-weight:700;z-index:5}
+.race-label.start{left:8px;top:4px}
+.race-label.finish{right:8px;top:4px}
 
 /* ===== Blind Box ===== */
 .blind-box{padding:10px 0}
@@ -1239,16 +1241,17 @@ function setLotteryMode(mode) {
 
 // ===== MARQUEE GAME (Racetrack) =====
 function buildMarqueeHTML(prizes) {
-  var h = '<div class="marquee-track" id="marqueeTrack">';
-  for (var r = 0; r < 3; r++) {
-    for (var i = 0; i < prizes.length; i++) {
-      var colors = WHEEL_COLORS[i % WHEEL_COLORS.length];
-      h += '<div class="marquee-item" style="background:linear-gradient(180deg,'+colors[0]+','+colors[1]+')"><span>'+prizes[i].icon+'</span><small>'+prizes[i].name+'</small></div>';
-    }
+  var h = '<div class="race-stadium" id="raceStadium">';
+  h += '<div class="race-label start">起点</div><div class="race-label finish">🏁终点</div>';
+  h += '<div class="race-start"></div><div class="race-finish"></div>';
+  var runners = ['🏃','🏃‍♂️','🏃‍♀️','💨','🚀','⚡','🔥','💪'];
+  for (var i = 0; i < prizes.length; i++) {
+    h += '<div class="race-lane">'+
+      '<span class="race-runner" id="runner'+i+'" style="left:0px">'+runners[i%runners.length]+'</span>'+
+      '<span class="race-runner-label" id="runnerLabel'+i+'">'+prizes[i].icon+' '+prizes[i].name+'</span>'+
+      '</div>';
   }
-  h += '</div><div class="marquee-finish"></div>';
-  // Start line
-  h += '<div style="position:absolute;top:0;left:calc(50% + 80px);width:4px;height:100%;background:rgba(255,255,255,0.5);z-index:4;pointer-events:none"></div>';
+  h += '</div>';
   return h;
 }
 
@@ -1338,29 +1341,44 @@ var marqueeAnim = null;
 function spinMarquee() {
   var prize = pickRandomPrize();
   recordSpin(prize);
-  var track = document.getElementById('marqueeTrack');
-  if (!track) return;
   var prizes = getPrizes();
-  var itemWidth = track.firstChild ? track.firstChild.offsetWidth + 12 : 92;
-  var targetIdx = prizes.indexOf(prize);
-  var winIdx = prizes.length + targetIdx;
-  // Target: winner stops centered at the finish line
-  var targetPos = -(winIdx * itemWidth);
+  var winIdx = prizes.indexOf(prize);
+  var stadium = document.getElementById('raceStadium');
+  if (!stadium) return;
+  var trackWidth = stadium.offsetWidth - 40;
+  var finishX = trackWidth - 50;
 
-  track.style.transition = 'none';
-  track.style.transform = 'translateX(0)';
-  track.offsetHeight;
-  // Fast sprint, then gradual deceleration (like a race)
-  track.style.transition = 'transform 4.5s cubic-bezier(0.05, 0.9, 0.15, 1)';
-  track.style.transform = 'translateX('+(targetPos - 60)+'px)';
+  // Reset all runners
+  for (var i = 0; i < prizes.length; i++) {
+    var r = document.getElementById('runner'+i);
+    var l = document.getElementById('runnerLabel'+i);
+    if (r) { r.style.transition = 'none'; r.style.left = '0px'; r.classList.remove('winner'); }
+    if (l) { l.style.transition = 'none'; l.style.left = '36px'; }
+  }
+  stadium.offsetHeight; // reflow
 
-  // Highlight winner
+  // Race! Each runner sprints with slight speed variation
+  for (var i = 0; i < prizes.length; i++) {
+    var r = document.getElementById('runner'+i);
+    var l = document.getElementById('runnerLabel'+i);
+    if (!r) continue;
+    var speed = 2.5 + Math.random() * 1.5;
+    var dur = speed * (i === winIdx ? 0.85 : 1);
+    r.style.transition = 'left '+dur+'s cubic-bezier(0.1,0.85,0.2,1)';
+    r.style.left = (finishX + Math.random()*15) + 'px';
+    if (l) {
+      l.style.transition = 'left '+dur+'s cubic-bezier(0.1,0.85,0.2,1)';
+      l.style.left = (finishX + 40) + 'px';
+    }
+  }
+
+  // Winner burst past finish line
   setTimeout(function(){
-    var items = track.querySelectorAll('.marquee-item');
-    items.forEach(function(el){ el.classList.remove('winner'); });
-    if (items[winIdx]) items[winIdx].classList.add('winner');
+    var wr = document.getElementById('runner'+winIdx);
+    if (wr) { wr.classList.add('winner'); wr.style.left = (finishX + 30) + 'px'; }
+    spawnConfetti();
     showPrizeResult(prize);
-  }, 4700);
+  }, 3500);
 }
 
 // ===== BLIND BOX (盲盒) =====

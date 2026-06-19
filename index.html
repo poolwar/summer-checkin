@@ -194,14 +194,17 @@ nav.bottom-nav{
 .result-hint{color:var(--text-light);font-size:.8rem;margin-bottom:18px}
 .wheel-canvas{max-width:100%;height:auto;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.15))}
 
-/* ===== Marquee ===== */
-.marquee-box{position:relative;width:100%;height:120px;overflow:hidden;background:#fff;border-radius:16px;box-shadow:var(--shadow);margin:10px 0}
-.marquee-track{display:flex;gap:4px;padding:16px 120px;white-space:nowrap;will-change:transform}
-.marquee-item{flex-shrink:0;width:70px;height:88px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:700;transition:all .3s}
-.marquee-item span{font-size:1.8rem}
-.marquee-item small{font-size:.55rem;text-align:center;line-height:1.2;margin-top:2px}
-.marquee-item.winner{transform:scale(1.2);box-shadow:0 0 20px rgba(255,215,0,0.8);z-index:2;border:3px solid #FFD700}
-.marquee-pointer{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.5rem;color:#E8845C;z-index:3;pointer-events:none;text-shadow:0 2px 4px rgba(0,0,0,0.2);background:rgba(255,255,255,0.8);width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+/* ===== Marquee Racetrack ===== */
+.marquee-box{position:relative;width:100%;height:200px;overflow:hidden;background:linear-gradient(180deg,#7CB342 0%,#8BC34A 30%,#9CCC65 50%,#8BC34A 70%,#7CB342 100%);border-radius:16px;box-shadow:var(--shadow);margin:10px 0;border:4px solid #558B2F}
+.marquee-box::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:repeating-linear-gradient(0deg,transparent,transparent 32px,rgba(255,255,255,0.15) 32px,rgba(255,255,255,0.15) 34px);pointer-events:none;z-index:0}
+.marquee-track{display:flex;gap:0;padding:20px 160px;white-space:nowrap;will-change:transform;position:relative;z-index:1}
+.marquee-item{flex-shrink:0;width:80px;min-height:140px;border-radius:16px 16px 8px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:700;transition:all .3s;margin:0 6px;position:relative;border:3px solid rgba(255,255,255,0.4);text-shadow:0 1px 3px rgba(0,0,0,0.3)}
+.marquee-item::after{content:'';position:absolute;bottom:-8px;width:30px;height:12px;background:rgba(0,0,0,0.3);border-radius:50%}
+.marquee-item span{font-size:2rem;filter:drop-shadow(0 2px 2px rgba(0,0,0,0.2))}
+.marquee-item small{font-size:.6rem;text-align:center;line-height:1.2;margin-top:4px;max-width:70px;word-break:break-all}
+.marquee-item.winner{transform:scale(1.25);box-shadow:0 0 30px rgba(255,215,0,1),0 0 60px rgba(255,215,0,0.6);z-index:5;border:4px solid #FFD700;animation:winnerBounce .2s infinite alternate}
+@keyframes winnerBounce{from{transform:scale(1.25) translateY(0)}to{transform:scale(1.25) translateY(-8px)}}
+.marquee-finish{position:absolute;top:0;left:50%;transform:translateX(-50%);width:6px;height:100%;background:repeating-linear-gradient(0deg,#fff 0,#fff 16px,#000 16px,#000 32px);z-index:4;box-shadow:0 0 10px rgba(0,0,0,0.3)}
 
 /* ===== Blind Box ===== */
 .blind-box{padding:10px 0}
@@ -1234,16 +1237,18 @@ function setLotteryMode(mode) {
   render();
 }
 
-// ===== MARQUEE GAME =====
+// ===== MARQUEE GAME (Racetrack) =====
 function buildMarqueeHTML(prizes) {
   var h = '<div class="marquee-track" id="marqueeTrack">';
-  // Repeat prizes 3x for seamless scrolling
   for (var r = 0; r < 3; r++) {
     for (var i = 0; i < prizes.length; i++) {
-      h += '<div class="marquee-item" style="background:'+WHEEL_COLORS[i%WHEEL_COLORS.length][0]+'"><span>'+prizes[i].icon+'</span><small>'+prizes[i].name+'</small></div>';
+      var colors = WHEEL_COLORS[i % WHEEL_COLORS.length];
+      h += '<div class="marquee-item" style="background:linear-gradient(180deg,'+colors[0]+','+colors[1]+')"><span>'+prizes[i].icon+'</span><small>'+prizes[i].name+'</small></div>';
     }
   }
-  h += '</div><div class="marquee-pointer">▼</div>';
+  h += '</div><div class="marquee-finish"></div>';
+  // Start line
+  h += '<div style="position:absolute;top:0;left:calc(50% + 80px);width:4px;height:100%;background:rgba(255,255,255,0.5);z-index:4;pointer-events:none"></div>';
   return h;
 }
 
@@ -1328,7 +1333,7 @@ function showPrizeResult(prize) {
     '<button class="btn btn-primary" onclick="render()">好的</button></div>';
 }
 
-// ===== MARQUEE (跑马灯) =====
+// ===== MARQUEE (Racetrack) =====
 var marqueeAnim = null;
 function spinMarquee() {
   var prize = pickRandomPrize();
@@ -1336,25 +1341,26 @@ function spinMarquee() {
   var track = document.getElementById('marqueeTrack');
   if (!track) return;
   var prizes = getPrizes();
-  var itemWidth = track.firstChild ? track.firstChild.offsetWidth + 4 : 80;
+  var itemWidth = track.firstChild ? track.firstChild.offsetWidth + 12 : 92;
   var targetIdx = prizes.indexOf(prize);
-  // The winning item is in the second repetition
   var winIdx = prizes.length + targetIdx;
-  var targetPos = -(winIdx * itemWidth) + 120; // Center the winner
+  // Target: winner stops centered at the finish line
+  var targetPos = -(winIdx * itemWidth);
 
   track.style.transition = 'none';
   track.style.transform = 'translateX(0)';
-  track.offsetHeight; // reflow
-  track.style.transition = 'transform 4s cubic-bezier(0.1, 0.8, 0.2, 1)';
-  track.style.transform = 'translateX('+(targetPos - 300)+'px)';
+  track.offsetHeight;
+  // Fast sprint, then gradual deceleration (like a race)
+  track.style.transition = 'transform 4.5s cubic-bezier(0.05, 0.9, 0.15, 1)';
+  track.style.transform = 'translateX('+(targetPos - 60)+'px)';
 
-  // Highlight winner after animation
+  // Highlight winner
   setTimeout(function(){
     var items = track.querySelectorAll('.marquee-item');
     items.forEach(function(el){ el.classList.remove('winner'); });
     if (items[winIdx]) items[winIdx].classList.add('winner');
     showPrizeResult(prize);
-  }, 4200);
+  }, 4700);
 }
 
 // ===== BLIND BOX (盲盒) =====

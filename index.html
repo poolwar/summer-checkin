@@ -148,7 +148,8 @@ nav.bottom-nav{
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:16px}
 .cal-hdr{text-align:center;font-size:.75rem;font-weight:700;color:var(--text-light);padding:8px 0}
 .cal-cell{aspect-ratio:1;border-radius:10px;display:flex;flex-direction:column;align-items:center;
-  justify-content:center;cursor:pointer;transition:all .2s;font-size:.8rem;position:relative;min-height:44px}
+  justify-content:center;cursor:pointer;transition:all .2s;font-size:.8rem;position:relative;
+  min-height:52px;padding:1px 0}
 .cal-cell:active{transform:scale(.92)}
 .cal-cell .day-num{font-weight:600;font-size:.85rem}
 .cal-cell .day-icon{font-size:.7rem}
@@ -590,41 +591,40 @@ function render() {
     const firstDow = new Date(calYear, calMonth - 1, 1).getDay();
 
     let calFull = 0, calTravel = 0;
-    for (let day = 1; day <= daysInM; day++) {
-      const ds = `${prefix2}-${String(day).padStart(2,'0')}`;
-      if (travelDays.includes(ds)) calTravel++;
-      else {
-        const dpC = getDayPoints(ds);
-        if (dpC.earned >= threshold) calFull++;
-      }
-    }
 
     html += `<div class="month-picker"><button onclick="changeCalMonth(-1)">◀</button>
       <h2>${calYear}年${calMonth}月</h2><button onclick="changeCalMonth(1)">▶</button></div>`;
-    html += `<div class="cal-stats"><span>🌟 全勤 ${calFull}天</span><span>✈️ 旅行 ${calTravel}天</span><span>🔥 连续 ${streak}天</span></div>`;
     html += `<div class="cal-grid">${['日','一','二','三','四','五','六'].map(d=>`<div class="cal-hdr">${d}</div>`).join('')}`;
 
     for (let i = 0; i < firstDow; i++) html += `<div class="cal-cell" style="cursor:default"></div>`;
+    const activeTasks = getActiveTasks();
+    const totalTasks = activeTasks.length;
+    const max3 = activeTasks.reduce((s,t)=>s+(t.points||0),0);
     for (let day = 1; day <= daysInM; day++) {
       const ds = `${prefix2}-${String(day).padStart(2,'0')}`;
       const isTD = travelDays.includes(ds);
-      let cellClass = 'cell-none', icon = '', prog = '';
-      if (isTD) { cellClass = 'cell-travel'; icon = '✈️'; }
+      let cellClass = 'cell-none', icon = '', cnt = '', pts = '';
+      if (isTD) { cellClass = 'cell-travel'; icon = '✈️'; cnt = '旅行'; calTravel++; }
       else {
+        const checkins = getCheckins();
+        let doneCount = 0;
+        activeTasks.forEach(t => { if (checkins[ds+'_'+t.id]?.status === 'done') doneCount++; });
         const dp3 = getDayPoints(ds);
-        const max3 = getActiveTasks().reduce((s,t)=>s+(t.points||0),0);
-        if (dp3.earned >= max3) { cellClass = 'cell-full'; icon = '🌟'; prog = dp3.earned+''; }
-        else if (dp3.earned > 0) { cellClass = 'cell-part'; icon = '🔸'; prog = dp3.earned+'/'+max3; }
-        else prog = '0/'+max3;
+        cnt = doneCount+'/'+totalTasks;
+        pts = dp3.earned+'分';
+        if (dp3.earned >= max3) { cellClass = 'cell-full'; icon = '🌟'; calFull++; }
+        else if (dp3.earned > 0) { cellClass = 'cell-part'; icon = '🔸'; }
       }
       const isToday = ds === today();
       const inRange = isDateAllowed(ds);
       const clickAction = inRange ? "openDate('"+ds+"')" : "void(0)";
       html += '<div class="cal-cell '+cellClass+(isToday?' is-today':'')+(!inRange?' cell-oor':'')+'" onclick="'+clickAction+'" oncontextmenu="event.preventDefault();toggleTravelDay(\''+ds+'\')">'+
-        '<span class="day-num">'+day+'</span><span class="day-icon">'+icon+'</span><span class="day-prog">'+prog+'</span></div>';
+        '<span class="day-num">'+day+'</span><span class="day-icon">'+icon+'</span><span class="day-prog">'+cnt+'</span><span class="day-prog">'+pts+'</span></div>';
     }
-    html += `</div>`;
-    html += `<div class="cal-legend">
+    html += '</div>';
+    // Stats after loop (accurate counts)
+    html += '<div class="cal-stats"><span>🌟 全勤 <b>'+calFull+'</b>天</span><span>✈️ 旅行 <b>'+calTravel+'</b>天</span><span>🔥 '+streak+'天</span></div>';
+    html += '<div class="cal-legend">
       <div><span class="legend-dot green"></span>全部完成</div><div><span class="legend-dot yellow"></span>部分完成</div>
       <div><span class="legend-dot gray"></span>未打卡</div><div><span class="legend-dot blue"></span>旅行模式</div>
       <div class="legend-hint">💡 右键日期切换旅行模式 | 👆 点击日期查看详情</div></div>`;

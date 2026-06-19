@@ -154,16 +154,16 @@ nav.bottom-nav{
 .cal-cell .day-num{font-weight:600;font-size:.75rem}
 .cal-cell .day-icon{font-size:.6rem}
 .cal-cell .day-prog{font-size:.5rem;color:var(--text-light)}
-.cell-full{background:#D4EDDA;border:2px solid #5DAF7C}
-.cell-part{background:#FFF5DC;border:2px solid #D4A54A}
-.cell-none{background:#FAFAFA;border:2px solid #E8E3DF}
+.cell-full{background:#C8E6C9;border:2px solid #5DAF7C;color:#2E5A3A}
+.cell-part{background:#FFECB3;border:2px solid #D4A54A;color:#6B5200}
+.cell-none{background:#FAFAFA;border:2px solid #E8E3DF;color:#AAA}
 .cell-travel{background:#D6EAF8;border:2px solid #7BAEC8}
 .is-today{box-shadow:0 0 0 3px var(--primary);z-index:1}
 .cell-oor{opacity:.35;cursor:not-allowed}
 .cal-legend{display:flex;flex-wrap:wrap;gap:10px;font-size:.65rem;color:var(--text-light);align-items:center}
 .legend-dot{display:inline-block;width:14px;height:14px;border-radius:4px;margin-right:5px}
-.legend-dot.green{background:#D4EDDA;border:1px solid #5DAF7C}
-.legend-dot.yellow{background:#FFF5DC;border:1px solid #D4A54A}
+.legend-dot.green{background:#C8E6C9;border:1px solid #5DAF7C}
+.legend-dot.yellow{background:#FFECB3;border:1px solid #D4A54A}
 .legend-dot.gray{background:#FAFAFA;border:1px solid #E8E3DF}
 .legend-dot.blue{background:#D6EAF8;border:1px solid #7BAEC8}
 .legend-hint{width:100%;font-size:.8rem;margin-top:4px}
@@ -612,8 +612,8 @@ function render() {
         const dp3 = getDayPoints(ds);
         cnt = doneCount+'/'+totalTasks;
         pts = dp3.earned+'分';
-        if (dp3.earned >= max3) { cellClass = 'cell-full'; icon = '🌟'; calFull++; }
-        else if (dp3.earned > 0) { cellClass = 'cell-part'; icon = '🔸'; }
+        if (dp3.earned >= max3) { cellClass = 'cell-full'; calFull++; }
+        else if (dp3.earned > 0) { cellClass = 'cell-part'; }
       }
       const isToday = ds === today();
       const inRange = isDateAllowed(ds);

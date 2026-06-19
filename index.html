@@ -370,10 +370,12 @@ function getDayPoints(dateStr) {
 function getAvailableForLottery() {
   let totalEarned = 0, totalBonus = 0;
   const range = allowedDateRange();
-  let d = new Date(range.min + 'T00:00:00');
-  const end = new Date(range.max + 'T00:00:00');
+  const [y0, m0, d0] = range.min.split('-').map(Number);
+  const [y1, m1, d1] = range.max.split('-').map(Number);
+  let d = new Date(y0, m0-1, d0);
+  const end = new Date(y1, m1-1, d1);
   while (d <= end) {
-    const ds = d.toISOString().slice(0, 10);
+    const ds = fmtDate(d);
     totalEarned += getDayPoints(ds).earned;
     totalBonus += getBonusPoints()[ds] || 0;
     d.setDate(d.getDate() + 1);
@@ -390,7 +392,11 @@ function setCoupons(v) { LS.set('coupons', v); }
 function setUnlocks(v) { LS.set('unlocks', v); }
 function setTasks(v) { LS.set('tasks', v); }
 
-function today() { return new Date().toISOString().slice(0, 10); }
+// Local time: avoids UTC offset bugs (China = UTC+8)
+function fmtDate(d) {
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function today() { return fmtDate(new Date()); }
 
 // ===== APP STATE =====
 let currentView = 'home';
@@ -432,7 +438,7 @@ function render() {
   d.setDate(d.getDate() + 1);
   while (true) {
     d.setDate(d.getDate() - 1);
-    const ds = d.toISOString().slice(0, 10);
+    const ds = fmtDate(d);
     const dp = getDayPoints(ds);
     if (dp.earned < threshold) break;
     streak++;
@@ -930,12 +936,9 @@ function navTo(view) {
 
 // Allowed checkin window: today and past 3 days
 function allowedDateRange() {
-  const t = new Date(); t.setHours(0,0,0,0);
-  const earliest = new Date(t); earliest.setDate(earliest.getDate() - 3);
-  return {
-    max: t.toISOString().slice(0, 10),
-    min: earliest.toISOString().slice(0, 10),
-  };
+  const t = new Date();
+  const earliest = new Date(t.getFullYear(), t.getMonth(), t.getDate() - 3);
+  return { max: today(), min: fmtDate(earliest) };
 }
 
 function isDateAllowed(dateStr) {
@@ -943,9 +946,10 @@ function isDateAllowed(dateStr) {
 }
 
 function changeDate(delta) {
-  const d = new Date(currentDate + 'T00:00:00');
+  const [y,m,day] = currentDate.split('-').map(Number);
+  const d = new Date(y, m-1, day);
   d.setDate(d.getDate() + delta);
-  const newDate = d.toISOString().slice(0, 10);
+  const newDate = fmtDate(d);
   if (!isDateAllowed(newDate)) {
     showMsg(newDate > today() ? '不能提前打卡未来的日期' : '仅支持过去3天内补卡', 'err');
     return;

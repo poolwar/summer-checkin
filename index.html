@@ -512,11 +512,11 @@ function render() {
     activeTasks.forEach(t => {
       const key = `${currentDate}_${t.id}`;
       const done = checkins[key]?.status === 'done';
-      html += `<div class="task-item${done?' done':''}" onclick="quickToggle(${t.id})">
-        <span class="task-emoji">${t.icon}</span><span class="task-name">${t.name}</span>
-        <span style="font-size:.7rem;color:var(--text-light);margin-right:4px">+${t.points||0}</span>
-        ${done?'<span class="task-badge">✅</span>':''}
-      </div>`;
+      html += '<div class="task-item'+(done?' done':'')+'" onclick="quickToggle('+t.id+')">'+
+        renderIcon(t.icon, 'task-emoji')+'<span class="task-name">'+t.name+'</span>'+
+        '<span style="font-size:.7rem;color:var(--text-light);margin-right:4px">+'+t.points+'</span>'+
+        (done?'<span class="task-badge">✅</span>':'')+
+        '</div>';
     });
     html += `<button class="btn btn-primary" onclick="navTo('daily')" style="margin-top:12px">📸 详细打卡（上传照片）</button></div>`;
 
@@ -567,12 +567,12 @@ function render() {
       const isExp = expandedTask === t.id;
       const matchingCoupons = coupons.filter(c => !c.used && c.taskName === t.name);
 
-      html += `<div class="task-detail-card${done?' done':''}${isExp?' expanded':''}">
-        <div class="task-detail-header" onclick="toggleExpand(${t.id})">
-          <span class="task-emoji">${t.icon}</span>
-          <div class="task-detail-info"><strong>${t.name} <span style="font-size:.7rem;color:var(--primary)">+${t.points||0}分</span></strong><span class="status-text">${done?'✅ 已完成':(travelDays.includes(currentDate)?'✈️ 旅行中':'⏳ 未完成')}${cin.photos.length ? ' · 📸 '+cin.photos.length+'张':''}</span></div>
-          <button class="btn-check${done?' checked':''}" onclick="event.stopPropagation();toggleTask(${t.id})">${done?'✅':'○'}</button>
-        </div>`;
+      html += '<div class="task-detail-card'+(done?' done':'')+(isExp?' expanded':'')+'">'+
+        '<div class="task-detail-header" onclick="toggleExpand('+t.id+')">'+
+        renderIcon(t.icon, 'task-emoji')+
+        '<div class="task-detail-info"><strong>'+t.name+' <span style="font-size:.7rem;color:var(--primary)">+'+(t.points||0)+'分</span></strong><span class="status-text">'+(done?'✅ 已完成':(travelDays.includes(currentDate)?'✈️ 旅行中':'⏳ 未完成'))+(cin.photos.length ? ' · 📸 '+cin.photos.length+'张':'')+'</span></div>'+
+        '<button class="btn-check'+(done?' checked':'')+'" onclick="event.stopPropagation();toggleTask('+t.id+')">'+(done?'✅':'○')+'</button>'+
+        '</div>';
 
       if (isExp) {
         html += `<div class="task-detail-body">
@@ -729,8 +729,12 @@ function render() {
     html += '<div class="card"><h3>📋 打卡任务</h3><p style="font-size:.75rem;color:var(--text-light);margin-bottom:12px">编辑名称、积分、启用/停用</p>';
     const allTasks = getTasks();
     allTasks.forEach(t => {
+      var isImg = t.icon && (t.icon.startsWith('http') || t.icon.startsWith('data:'));
       html += '<div class="settings-item" style="gap:4px;flex-wrap:wrap">'+
-        '<span class="editable-icon" id="icon_'+t.id+'" onclick="cycleIcon('+t.id+')" title="点击切换图标">'+t.icon+'</span>'+
+        (isImg
+          ? '<img src="'+t.icon+'" style="width:28px;height:28px;border-radius:6px;object-fit:contain;cursor:pointer" onclick="promptIconUrl('+t.id+')" title="点击更换图片">'
+          : '<span class="editable-icon" id="icon_'+t.id+'" onclick="cycleIcon('+t.id+')" title="点击切换图标">'+t.icon+'</span>'
+        )+
         '<input value="'+t.name.replace(/"/g,'&quot;')+'" id="name_'+t.id+'" style="flex:1;min-width:60px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:.8rem;font-family:inherit" onchange="renameTask('+t.id+',this.value)">'+
         '<input type="number" value="'+(t.points||0)+'" id="pts_'+t.id+'" min="0" max="100" style="width:42px;border:1px solid var(--border);border-radius:6px;padding:4px;font-size:.8rem;text-align:center;font-family:inherit" onchange="updateTaskPoints('+t.id+',this.value)" title="积分">'+
         '<span style="font-size:.65rem">分</span>'+
@@ -1465,6 +1469,21 @@ function toggleTaskActive(id) {
 }
 
 const EMOJI_OPTIONS = ['📝','📖','🗣️','🧮','🔤','🏃','🎨','🎵','🧹','🧘','🏊','🚴','🎯','📚','✍️','💪','🧠','🎮','🎹','🥁','🌱','🐾'];
+
+function promptIconUrl(taskId) {
+  var url = prompt('输入图标图片URL（支持 https:// 或 data: 开头）：');
+  if (!url) return;
+  var tasks = getTasks();
+  var t = tasks.find(function(t){ return t.id === taskId; });
+  if (t) { t.icon = url.trim(); setTasks(tasks); render(); }
+}
+
+function renderIcon(icon, cls) {
+  if (icon && (icon.startsWith('http') || icon.startsWith('data:'))) {
+    return '<img src="'+icon+'" class="'+(cls||'')+'" style="width:1.4em;height:1.4em;border-radius:4px;object-fit:contain;vertical-align:middle">';
+  }
+  return '<span class="'+(cls||'')+'">'+icon+'</span>';
+}
 
 function cycleIcon(taskId) {
   const tasks = getTasks();

@@ -735,7 +735,7 @@ function render() {
     html += `</div>`;
 
     html += `<div class="card"><h3>🔒 安全</h3>
-      <button class="btn btn-danger" onclick="clearAuth();navTo('home');showMsg('🔒 已锁定，设置需重新输密码','ok')">🔐 锁定设置（离开后需重输密码）</button>
+      <button class="btn btn-danger" onclick="clearAuth();location.reload()">🔐 锁定应用（需重新输入密码）</button>
       </div>`;
 
     html += `<div class="card"><h3>💾 数据管理</h3>
@@ -935,14 +935,9 @@ function spin() {
 
 // ===== ACTIONS =====
 function navTo(view) {
-  // Settings requires password
-  if (view === 'settings' && !isAuthenticated()) {
-    showSettingsPassword();
-    return;
-  }
   currentView = view;
   if (view === 'daily' || view === 'home') currentDate = today();
-  if (view === 'lottery') currentDate = today();
+  if (view === 'lottery' || view === 'settings') currentDate = today();
   expandedTask = null;
   render();
 }
@@ -1389,36 +1384,16 @@ function isAuthenticated() { return sessionStorage.getItem('_auth') === '1'; }
 function setAuthenticated() { sessionStorage.setItem('_auth', '1'); }
 function clearAuth() { sessionStorage.removeItem('_auth'); }
 
-function showSettingsPassword() {
-  // Show a modal overlay
-  const overlay = document.createElement('div');
-  overlay.id = 'pwdOverlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:999;display:flex;align-items:center;justify-content:center;padding:20px';
-  overlay.innerHTML = '<div style="background:#fff;border-radius:20px;padding:32px 24px;text-align:center;max-width:320px;width:100%;animation:popIn .3s">'+
-    '<div style="font-size:3rem;margin-bottom:8px">🔐</div>'+
-    '<h3 style="color:#FF6B35;margin-bottom:4px">设置密码</h3>'+
-    '<p style="color:#7F8C8D;font-size:.85rem;margin-bottom:16px">请输入密码才能修改配置</p>'+
-    '<form onsubmit="event.preventDefault();checkSettingsPwd(this.pwd.value)" style="display:flex;gap:8px">'+
-    '<input type="password" name="pwd" placeholder="密码" autofocus style="flex:1;padding:12px;border:2px solid #ECF0F1;border-radius:10px;font-size:1rem;font-family:inherit;text-align:center" inputmode="numeric">'+
-    '<button type="submit" style="padding:12px 18px;background:linear-gradient(135deg,#FF6B35,#FF8C42);color:#fff;border:none;border-radius:10px;font-size:.95rem;font-weight:700;cursor:pointer">确认</button>'+
-    '</form><p id="pwdErr2" style="color:#E74C3C;font-size:.85rem;margin-top:10px;display:none">密码错误</p>'+
-    '<button onclick="document.getElementById(\'pwdOverlay\').remove()" style="margin-top:12px;background:none;border:none;color:#7F8C8D;font-size:.85rem;cursor:pointer">取消</button></div>';
-  document.body.appendChild(overlay);
-  // Focus the input
-  setTimeout(() => { const inp = document.querySelector('#pwdOverlay input'); if (inp) inp.focus(); }, 100);
+function showPasswordScreen() {
+  document.getElementById('app').innerHTML = `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(135deg,#FFF8F0,#FFE0CC);font-family:system-ui,sans-serif"><div style="background:#fff;border-radius:24px;padding:40px 28px;box-shadow:0 8px 32px rgba(0,0,0,0.1);text-align:center;max-width:360px;width:100%"><div style="font-size:4rem;margin-bottom:12px">🔐</div><h1 style="color:#FF6B35;margin-bottom:8px">暑假打卡</h1><p style="color:#7F8C8D;margin-bottom:20px">请输入密码</p><form onsubmit="event.preventDefault();checkPassword(this.pwd.value)" style="display:flex;gap:8px"><input type="password" name="pwd" placeholder="密码" autofocus style="flex:1;padding:12px 14px;border:2px solid #ECF0F1;border-radius:10px;font-size:1rem;font-family:inherit;text-align:center" inputmode="numeric"><button type="submit" style="padding:12px 20px;background:linear-gradient(135deg,#FF6B35,#FF8C42);color:#fff;border:none;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer">进入</button></form><p id="pwdErr" style="color:#E74C3C;font-size:.85rem;margin-top:12px;display:none">密码错误</p></div></div>`;
 }
 
-function checkSettingsPwd(input) {
+function checkPassword(input) {
   if (input === APP_PASSWORD) {
     setAuthenticated();
-    document.getElementById('pwdOverlay')?.remove();
-    // Now navigate to settings
-    currentView = 'settings';
-    currentDate = today();
-    expandedTask = null;
-    render();
+    startApp();
   } else {
-    const err = document.getElementById('pwdErr2');
+    const err = document.getElementById('pwdErr');
     if (err) { err.style.display = 'block'; err.textContent = '密码错误，请重试'; }
   }
 }
@@ -1466,8 +1441,12 @@ openDB().then(() => {
 });
 } // end startApp
 
-// Entry: start app directly (password only for settings)
-startApp();
+// Entry: check password first
+if (isAuthenticated()) {
+  startApp();
+} else {
+  showPasswordScreen();
+}
 
 function handleStartupImport(input) {
   const file = input.files[0];

@@ -283,17 +283,16 @@ nav.bottom-nav{
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ===== SUPABASE CONFIG =====
-const SUPABASE_URL = 'https://hwyuaukabthsoupywtfp.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_Pb97Zn0XW5aPVqn8OWVh5Q_mIjrRYG5';
-let sbClient = null;
-let cloudSyncTimer = null;
-let cloudLastUpdated = null;
+var SUPABASE_URL = 'https://hwyuaukabthsoupywtfp.supabase.co';
+var SUPABASE_KEY = 'sb_publishable_Pb97Zn0XW5aPVqn8OWVh5Q_mIjrRYG5';
+var cloudSyncTimer = null;
+var cloudLastUpdated = null;
 
 function getSupabase() {
-  if (!sbClient && window.supabase) {
-    sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  if (typeof window.supabase !== 'undefined' && window.supabase.createClient) {
+    return window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   }
-  return sbClient;
+  return null;
 }
 
 // Pull all app data from cloud

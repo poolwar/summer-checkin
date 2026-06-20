@@ -1295,9 +1295,10 @@ function recordSpin(prize) {
   var history = getLotteryHistory();
   history.push({id:Date.now(), name:prize.name, icon:prize.icon, date:spinDate, redeemed:false});
   setLotteryHistory(history);
+  // Force write unlocks to localStorage directly (bypass any override issues)
   var unlocks = getUnlocks();
   unlocks.push({date:spinDate, id:Date.now()});
-  setUnlocks(unlocks);
+  localStorage.setItem('unlocks', JSON.stringify(unlocks));
   if (prize.name.includes('免练字')) {
     var coupons = getCoupons();
     coupons.push({id:Date.now(), taskName:'语文练字', wonDate:spinDate, used:false});
@@ -1314,20 +1315,33 @@ function recordSpin(prize) {
     bp[spinDate] = (bp[spinDate]||0) + bonusEarned;
     setBonusPoints(bp);
   }
+  scheduleBackup();
   return prize;
 }
 
 function updatePointsDisplay() {
   var pts = getAvailableForLottery();
   var threshold = getDailyThreshold();
-  // Update the points bar card
-  var pbar = document.querySelector('.card');
-  if (!pbar) return;
-  var vals = pbar.querySelectorAll('span');
-  for (var i = 0; i < vals.length; i++) {
-    if (vals[i].style.fontWeight === '800' && vals[i].style.color.indexOf('184') > -1) {
-      vals[i].textContent = pts;
-      break;
+  // Update the points bar — find the stat-val containing pooled points
+  var cards = document.querySelectorAll('.card');
+  for (var c = 0; c < cards.length; c++) {
+    var spans = cards[c].querySelectorAll('span');
+    for (var i = 0; i < spans.length; i++) {
+      var s = spans[i];
+      // The pooled points span has large font and the primary color
+      if (s.style.fontSize === '1.5rem' && parseInt(s.style.fontWeight) >= 700) {
+        s.textContent = pts;
+        // Also update "已抽次数"
+        var todaySpins = getUnlocks().filter(function(u){return u.date===today();}).length;
+        for (var j = i; j < spans.length; j++) {
+          if (spans[j].textContent && spans[j].textContent.indexOf('🎰×') > -1) {
+            spans[j].textContent = '🎰×' + todaySpins;
+            break;
+          }
+        }
+        c = cards.length; // break outer loop
+        break;
+      }
     }
   }
   // Update spin button area
@@ -1338,11 +1352,6 @@ function updatePointsDisplay() {
     } else {
       act.innerHTML = '<div class="cannot-spin">当前'+pts+'分，需'+threshold+'分才能抽奖</div>';
     }
-  }
-  // Update wheel if marathon mode
-  var runnerLabels = document.querySelectorAll('.race-runner-label');
-  if (runnerLabels.length > 0) {
-    // Runners already moved, just update points
   }
 }
 

@@ -1071,7 +1071,7 @@ function spin() {
     else {
       recordSpin(selectedPrize);
       showPrizeResult(selectedPrize);
-      setTimeout(function(){ render(); }, 500);
+      updatePointsDisplay();
     }
   }
   spinAnim = requestAnimationFrame(animate);
@@ -1317,6 +1317,35 @@ function recordSpin(prize) {
   return prize;
 }
 
+function updatePointsDisplay() {
+  var pts = getAvailableForLottery();
+  var threshold = getDailyThreshold();
+  // Update the points bar card
+  var pbar = document.querySelector('.card');
+  if (!pbar) return;
+  var vals = pbar.querySelectorAll('span');
+  for (var i = 0; i < vals.length; i++) {
+    if (vals[i].style.fontWeight === '800' && vals[i].style.color.indexOf('184') > -1) {
+      vals[i].textContent = pts;
+      break;
+    }
+  }
+  // Update spin button area
+  var act = document.querySelector('.wheel-actions');
+  if (act) {
+    if (pts >= threshold) {
+      act.innerHTML = '<button class="btn-spin" onclick="spinGame()">🎰 开始抽奖！（消耗'+threshold+'分）</button>';
+    } else {
+      act.innerHTML = '<div class="cannot-spin">当前'+pts+'分，需'+threshold+'分才能抽奖</div>';
+    }
+  }
+  // Update wheel if marathon mode
+  var runnerLabels = document.querySelectorAll('.race-runner-label');
+  if (runnerLabels.length > 0) {
+    // Runners already moved, just update points
+  }
+}
+
 function showPrizeResult(prize) {
   var bonusEarned = 0;
   var m = prize.name.match(/积分\+(\d+)/);
@@ -1379,7 +1408,7 @@ function spinMarquee() {
     if (wr) { wr.classList.add('winner'); wr.style.left = (finishX + 30) + 'px'; }
     spawnConfetti();
     showPrizeResult(prize);
-    setTimeout(function(){ render(); }, 500);
+    updatePointsDisplay();
   }, 3500);
 }
 
@@ -1411,7 +1440,7 @@ function spinBlind() {
       setTimeout(function(){
         showPrizeResult(prize);
         blindPicked = false;
-        setTimeout(function(){ render(); }, 500);
+        updatePointsDisplay();
       }, 800);
     }
   }, 200);

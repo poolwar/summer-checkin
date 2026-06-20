@@ -2110,10 +2110,31 @@ function handleStartupImport(input) {
 }
 
 function freshStart() {
-  // Start fresh with defaults, push to cloud
+  // Start fresh with defaults — write to localStorage + push to cloud immediately
   localStorage.clear();
+  // Save defaults to localStorage so we survive refresh
+  setTasksDirect(DEFAULT_TASKS);
+  LS.setRaw('prizes', DEFAULT_PRIZES);
+  LS.setRaw('checkins', {});
+  LS.setRaw('travel_days', []);
+  LS.setRaw('lottery_history', []);
+  LS.setRaw('coupons', []);
+  LS.setRaw('unlocks', []);
+  LS.setRaw('dailyThreshold', 30);
+  LS.setRaw('bonus_points', {});
+  // Immediately push defaults to cloud (bypass debounce)
+  if (cloudSyncTimer) { clearTimeout(cloudSyncTimer); cloudSyncTimer = null; }
+  var client = getSupabase();
+  if (client) {
+    client.from('app_state').upsert({
+      id: 1,
+      data: { tasks: DEFAULT_TASKS, prizes: DEFAULT_PRIZES, checkins: {}, travel_days: [], lottery_history: [], coupons: [], unlocks: [], dailyThreshold: 30, bonus_points: {} },
+      updated_at: new Date().toISOString()
+    }).then(function() {
+      localStorage.setItem('_lastCloudSync', new Date().toISOString());
+    });
+  }
   render();
-  syncToCloud();
   showMsg('✨ 全新开始！', 'ok');
 }
 </script>

@@ -1071,6 +1071,7 @@ function spin() {
     else {
       recordSpin(selectedPrize);
       showPrizeResult(selectedPrize);
+      setTimeout(function(){ render(); }, 500);
     }
   }
   spinAnim = requestAnimationFrame(animate);
@@ -1378,6 +1379,7 @@ function spinMarquee() {
     if (wr) { wr.classList.add('winner'); wr.style.left = (finishX + 30) + 'px'; }
     spawnConfetti();
     showPrizeResult(prize);
+    setTimeout(function(){ render(); }, 500);
   }, 3500);
 }
 
@@ -1409,6 +1411,7 @@ function spinBlind() {
       setTimeout(function(){
         showPrizeResult(prize);
         blindPicked = false;
+        setTimeout(function(){ render(); }, 500);
       }, 800);
     }
   }, 200);

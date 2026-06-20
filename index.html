@@ -698,7 +698,7 @@ function render() {
     } else {
       // Points bar
       html += '<div class="card" style="text-align:center;margin-bottom:8px"><div style="display:flex;justify-content:space-around">'+
-        '<div><span style="font-size:1.5rem;font-weight:800;color:var(--primary)">'+pooledPts+'</span><br><span style="font-size:.7rem;color:var(--text-light)">可用积分</span></div>'+
+        '<div><span id="pooledPtsVal" style="font-size:1.5rem;font-weight:800;color:var(--primary)">'+pooledPts+'</span><br><span style="font-size:.7rem;color:var(--text-light)">可用积分</span></div>'+
         '<div><span style="font-size:1rem">🎯</span><br><span style="font-size:.7rem;color:var(--text-light)">门槛 '+threshold+'</span></div>'+
         '<div><span style="font-size:1rem">'+(todayPts.earned||0)+'</span><br><span style="font-size:.7rem;color:var(--text-light)">任务积分</span></div>'+
         (bp>0?'<div><span style="font-size:1rem;color:var(--success)">+'+bp+'</span><br><span style="font-size:.7rem;color:var(--text-light)">抽奖积分</span></div>':'')+
@@ -1322,29 +1322,8 @@ function recordSpin(prize) {
 function updatePointsDisplay() {
   var pts = getAvailableForLottery();
   var threshold = getDailyThreshold();
-  // Update the points bar — find the stat-val containing pooled points
-  var cards = document.querySelectorAll('.card');
-  for (var c = 0; c < cards.length; c++) {
-    var spans = cards[c].querySelectorAll('span');
-    for (var i = 0; i < spans.length; i++) {
-      var s = spans[i];
-      // The pooled points span has large font and the primary color
-      if (s.style.fontSize === '1.5rem' && parseInt(s.style.fontWeight) >= 700) {
-        s.textContent = pts;
-        // Also update "已抽次数"
-        var todaySpins = getUnlocks().filter(function(u){return u.date===today();}).length;
-        for (var j = i; j < spans.length; j++) {
-          if (spans[j].textContent && spans[j].textContent.indexOf('🎰×') > -1) {
-            spans[j].textContent = '🎰×' + todaySpins;
-            break;
-          }
-        }
-        c = cards.length; // break outer loop
-        break;
-      }
-    }
-  }
-  // Update spin button area
+  var el = document.getElementById('pooledPtsVal');
+  if (el) el.textContent = pts;
   var act = document.querySelector('.wheel-actions');
   if (act) {
     if (pts >= threshold) {

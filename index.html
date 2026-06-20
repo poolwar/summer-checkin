@@ -517,8 +517,10 @@ function render() {
     activeTasks.forEach(t => {
       const key = `${currentDate}_${t.id}`;
       const done = checkins[key]?.status === 'done';
+      const hasCoupon = !done && coupons.some(function(c){ return !c.used && c.taskName === t.name; });
       html += '<div class="task-item'+(done?' done':'')+'" onclick="quickToggle('+t.id+')">'+
         renderIcon(t.icon, 'task-emoji')+'<span class="task-name">'+t.name+'</span>'+
+        (hasCoupon?'<span style="font-size:.7rem;margin-right:2px" title="有免做券可用">🎫</span>':'')+
         '<span style="font-size:.7rem;color:var(--text-light);margin-right:4px">+'+t.points+'</span>'+
         (done?'<span class="task-badge">✅</span>':'')+
         '</div>';
@@ -538,7 +540,7 @@ function render() {
       activeCoupons.forEach(c => {
         html += `<div class="coupon-item"><span>🎫</span><span>${c.taskName}</span><span class="c-date">获得于 ${c.wonDate}</span></div>`;
       });
-      html += `<p style="font-size:.75rem;color:var(--text-light);margin-top:8px">在打卡页面使用免做券</p></div>`;
+      html += `<p style="font-size:.75rem;color:var(--text-light);margin-top:8px">💡 打卡时点击任务即可选择使用免做券</p></div>`;
     }
   }
 
@@ -572,10 +574,11 @@ function render() {
       const isExp = expandedTask === t.id;
       const matchingCoupons = coupons.filter(c => !c.used && c.taskName === t.name);
 
+      const hasCouponForTask = matchingCoupons.length > 0;
       html += '<div class="task-detail-card'+(done?' done':'')+(isExp?' expanded':'')+'">'+
         '<div class="task-detail-header" onclick="toggleExpand('+t.id+')">'+
         renderIcon(t.icon, 'task-emoji')+
-        '<div class="task-detail-info"><strong>'+t.name+' <span style="font-size:.7rem;color:var(--primary)">+'+(t.points||0)+'分</span></strong><span class="status-text">'+(done?'✅ 已完成':(travelDays.includes(currentDate)?'✈️ 旅行中':'⏳ 未完成'))+(cin.photos.length ? ' · 📸 '+cin.photos.length+'张':'')+'</span></div>'+
+        '<div class="task-detail-info"><strong>'+t.name+' <span style="font-size:.7rem;color:var(--primary)">+'+(t.points||0)+'分</span>'+(hasCouponForTask?' <span style="font-size:.7rem" title="有免做券可用">🎫</span>':'')+'</strong><span class="status-text">'+(done?'✅ 已完成':(travelDays.includes(currentDate)?'✈️ 旅行中':'⏳ 未完成'))+(cin.photos.length ? ' · 📸 '+cin.photos.length+'张':'')+(hasCouponForTask?' · 🎫 有免做券':'')+'</span></div>'+
         '<button class="btn-check'+(done?' checked':'')+'" onclick="event.stopPropagation();toggleTask('+t.id+')">'+(done?'✅':'○')+'</button>'+
         '</div>';
 
@@ -1130,14 +1133,90 @@ function quickToggle(taskId) {
   const key = `${currentDate}_${taskId}`;
   const checkins = getCheckins();
   const current = checkins[key];
-  const newStatus = (current && current.status === 'done') ? 'pending' : 'done';
-  checkins[key] = { ...(current || {}), status: newStatus, note: current?.note || '', photos: current?.photos || [] };
+  const isCurrentlyDone = current && current.status === 'done';
+  // Undo: always allow untoggle
+  if (isCurrentlyDone) {
+    checkins[key] = { ...(current || {}), status: 'pending', note: current?.note || '', photos: current?.photos || [] };
+    setCheckins(checkins);
+    render();
+    return;
+  }
+  // Check for matching unused coupon
+  const task = getActiveTasks().find(function(t){ return t.id === taskId; });
+  if (task) {
+    const coupon = getCoupons().find(function(c){ return !c.used && c.taskName === task.name; });
+    if (coupon) { showCouponChoice(taskId, task.name, coupon, true); return; }
+  }
+  // Normal toggle
+  checkins[key] = { ...(current || {}), status: 'done', note: current?.note || '', photos: current?.photos || [] };
   setCheckins(checkins);
   render();
 }
 
 function toggleTask(taskId) {
-  quickToggle(taskId);
+  const key = `${currentDate}_${taskId}`;
+  const checkins = getCheckins();
+  const current = checkins[key];
+  const isCurrentlyDone = current && current.status === 'done';
+  // Undo
+  if (isCurrentlyDone) {
+    checkins[key] = { ...(current || {}), status: 'pending', note: current?.note || '', photos: current?.photos || [] };
+    setCheckins(checkins);
+    render();
+    return;
+  }
+  // Check for matching unused coupon
+  const task = getActiveTasks().find(function(t){ return t.id === taskId; });
+  if (task) {
+    const coupon = getCoupons().find(function(c){ return !c.used && c.taskName === task.name; });
+    if (coupon) { showCouponChoice(taskId, task.name, coupon, false); return; }
+  }
+  // No coupon — expand for manual evidence upload
+  expandedTask = taskId;
+  render();
+}
+
+// ===== COUPON-CHECKIN INTERACTION =====
+function showCouponChoice(taskId, taskName, coupon, fromHome) {
+  var overlay = document.createElement('div');
+  overlay.id = 'couponChoiceOverlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:999;display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,sans-serif';
+  overlay.innerHTML = '<div style="background:#fff;border-radius:20px;padding:28px 24px;text-align:center;max-width:340px;width:100%;animation:popIn .3s">'+
+    '<div style="font-size:3rem;margin-bottom:8px">🎫</div>'+
+    '<h3 style="color:#FF6B35;margin-bottom:4px">免做券可用</h3>'+
+    '<p style="color:#7F8C8D;font-size:.9rem;margin-bottom:6px">「'+taskName+'」</p>'+
+    '<p style="color:#7F8C8D;font-size:.8rem;margin-bottom:20px">有一张免做券可以使用<br>使用后无需上传打卡证明</p>'+
+    '<button onclick="document.getElementById(\'couponChoiceOverlay\').remove();applyCouponCheckin('+coupon.id+',\''+taskName.replace(/'/g,"\\'")+'\','+taskId+')" style="display:block;width:100%;padding:14px;background:linear-gradient(135deg,#FFD700,#FFA500);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;margin-bottom:10px">🎫 使用免做券</button>'+
+    '<button onclick="document.getElementById(\'couponChoiceOverlay\').remove();'+ (fromHome ? 'manualQuickToggle('+taskId+')' : 'manualCheckin('+taskId+')') +'" style="display:block;width:100%;padding:14px;background:#fff;border:2px solid #E8E3DF;border-radius:12px;font-size:.95rem;cursor:pointer;color:#3D3D3D">📸 手动打卡（上传证明）</button>'+
+    '<button onclick="document.getElementById(\'couponChoiceOverlay\').remove()" style="margin-top:10px;background:none;border:none;color:#7F8C8D;font-size:.85rem;cursor:pointer">取消</button></div>';
+  document.body.appendChild(overlay);
+}
+
+function applyCouponCheckin(couponId, taskName, taskId) {
+  var coupons = getCoupons();
+  var idx = coupons.findIndex(function(c){ return c.id === couponId; });
+  if (idx >= 0) { coupons[idx].used = true; setCoupons(coupons); }
+  var key = currentDate + '_' + taskId;
+  var checkins = getCheckins();
+  checkins[key] = { status: 'done', note: '🎫 使用免做券', photos: (checkins[key] && checkins[key].photos) || [] };
+  setCheckins(checkins);
+  showMsg('🎫 免做券已使用：' + taskName, 'ok');
+  expandedTask = null;
+  render();
+}
+
+function manualQuickToggle(taskId) {
+  var key = currentDate + '_' + taskId;
+  var checkins = getCheckins();
+  var current = checkins[key];
+  checkins[key] = { status: 'done', note: current?.note || '', photos: current?.photos || [] };
+  setCheckins(checkins);
+  render();
+}
+
+function manualCheckin(taskId) {
+  expandedTask = taskId;
+  render();
 }
 
 function toggleExpand(taskId) {

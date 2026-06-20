@@ -280,7 +280,125 @@ nav.bottom-nav{
 <body>
 <div id="app"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+// ===== SUPABASE CONFIG =====
+const SUPABASE_URL = 'https://hwyuaukabthsoupywtfp.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_Pb97Zn0XW5aPVqn8OWVh5Q_mIjrRYG5';
+let supabase = null;
+let cloudSyncTimer = null;
+let cloudLastUpdated = null;
+
+function getSupabase() {
+  if (!supabase && window.supabase) {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  }
+  return supabase;
+}
+
+// Pull all app data from cloud
+async function loadFromCloud() {
+  var client = getSupabase();
+  if (!client) return null;
+  try {
+    var res = await client.from('app_state').select('*').eq('id', 1).single();
+    if (res.error) {
+      if (res.error.code === 'PGRST116') return null; // no rows yet
+      console.warn('Supabase load error:', res.error.message);
+      return null;
+    }
+    return res.data;
+  } catch(e) {
+    console.warn('Supabase load failed:', e.message);
+    return null;
+  }
+}
+
+// Push all app data to cloud (debounced 2s)
+function syncToCloud() {
+  if (cloudSyncTimer) clearTimeout(cloudSyncTimer);
+  cloudSyncTimer = setTimeout(function() {
+    var client = getSupabase();
+    if (!client) return;
+    var data = {
+      tasks: getTasks(),
+      prizes: getPrizes(),
+      checkins: getCheckins(),
+      travel_days: getTravelDays(),
+      lottery_history: getLotteryHistory(),
+      coupons: getCoupons(),
+      unlocks: getUnlocks(),
+      dailyThreshold: getDailyThreshold(),
+      bonus_points: getBonusPoints(),
+    };
+    client.from('app_state').upsert({ id: 1, data: data, updated_at: new Date().toISOString() })
+      .then(function(res) {
+        if (res.error) console.warn('Supabase sync error:', res.error.message);
+        else cloudLastUpdated = new Date();
+      });
+  }, 2000);
+}
+
+// Restore localStorage from cloud row
+function restoreFromCloud(row) {
+  if (!row || !row.data) return false;
+  var d = row.data;
+  if (d.tasks) setTasksDirect(d.tasks);
+  if (d.prizes) LS.setRaw('prizes', d.prizes);
+  if (d.checkins) setCheckinsDirect(d.checkins);
+  if (d.travel_days) setTravelDaysDirect(d.travel_days);
+  if (d.lottery_history) setLotteryHistoryDirect(d.lottery_history);
+  if (d.coupons) setCouponsDirect(d.coupons);
+  if (d.unlocks) setUnlocksDirect(d.unlocks);
+  if (d.dailyThreshold != null) LS.setRaw('dailyThreshold', d.dailyThreshold);
+  if (d.bonus_points) LS.setRaw('bonus_points', d.bonus_points);
+  cloudLastUpdated = new Date(row.updated_at || Date.now());
+  return true;
+}
+
+// Direct setters (no sync-to-cloud to avoid loops)
+function setTasksDirect(v) { LS.setRaw('tasks', v); }
+function setCheckinsDirect(v) { LS.setRaw('checkins', v); }
+function setTravelDaysDirect(v) { LS.setRaw('travel_days', v); }
+function setLotteryHistoryDirect(v) { LS.setRaw('lottery_history', v); }
+function setCouponsDirect(v) { LS.setRaw('coupons', v); }
+function setUnlocksDirect(v) { LS.setRaw('unlocks', v); }
+
+// Upload photo to Supabase Storage, return public URL
+async function uploadPhotoToCloud(file, taskId) {
+  var client = getSupabase();
+  if (!client) return null;
+  try {
+    var ext = file.name.split('.').pop() || 'jpg';
+    var path = today() + '_' + taskId + '_' + Date.now() + '.' + ext;
+    var res = await client.storage.from('photos').upload(path, file, {
+      cacheControl: '31536000',
+      upsert: false
+    });
+    if (res.error) {
+      console.warn('Photo upload error:', res.error.message);
+      return null;
+    }
+    var urlRes = client.storage.from('photos').getPublicUrl(path);
+    return urlRes.data.publicUrl;
+  } catch(e) {
+    console.warn('Photo upload failed:', e.message);
+    return null;
+  }
+}
+
+// Delete photo from Supabase Storage
+async function deletePhotoFromCloud(url) {
+  var client = getSupabase();
+  if (!client) return;
+  try {
+    var parts = url.split('/photos/');
+    if (parts.length < 2) return;
+    var path = parts[1];
+    await client.storage.from('photos').remove([path]);
+  } catch(e) { /* ignore */ }
+}
+
 // ===== DATABASE LAYER =====
 const DB_NAME = 'SummerCheckinDB';
 let db = null;
@@ -342,6 +460,7 @@ function deletePhoto(id) {
 const LS = {
   get(k, def) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch { return def; } },
   set(k, v) { localStorage.setItem(k, JSON.stringify(v)); },
+  setRaw(k, v) { localStorage.setItem(k, JSON.stringify(v)); },
 };
 
 const DEFAULT_TASKS = [
@@ -493,8 +612,8 @@ function render() {
   }
 
   let html = '';
-  const saveTime = lastSaveTime();
-  html += '<header><h1>🏖️ 暑假打卡</h1>'+(saveTime?'<span style="font-size:.6rem;opacity:.8">💾 '+saveTime+'</span>':'')+'</header><main>';
+  const syncStatus = cloudLastUpdated ? '☁️ 已同步' : '';
+  html += '<header><h1>🏖️ 暑假打卡</h1>'+(syncStatus?'<span style="font-size:.6rem;opacity:.8">'+syncStatus+'</span>':'')+'</header><main>';
 
   if (currentView === 'home') {
     // Stats
@@ -590,8 +709,8 @@ function render() {
         // Photos
         if (cin.photos.length > 0) {
           html += `<div class="files-preview">`;
-          cin.photos.forEach(pid => {
-            html += `<div class="file-thumb" id="thumb_${pid}"><div class="file-name">加载中...</div></div>`;
+          cin.photos.forEach(function(ref, idx) {
+            html += '<div class="file-thumb" id="thumb_'+t.id+'_'+idx+'"><div class="file-name">加载中...</div></div>';
           });
           html += `</div>`;
         }
@@ -830,23 +949,34 @@ function render() {
     setTimeout(() => drawWheel(0), 50);
   }
   if (currentView === 'daily') {
-    // Load photo thumbnails
+    // Load photo thumbnails (URL or IndexedDB)
     activeTasks.forEach(t => {
       const key = `${currentDate}_${t.id}`;
       const cin = (getCheckins())[key];
       if (cin && cin.photos && cin.photos.length > 0) {
-        cin.photos.forEach(pid => {
-          getPhoto(pid).then(p => {
-            const el = document.getElementById('thumb_'+pid);
-            if (el && p) {
-              if (p.mime.startsWith('image/')) {
-                el.innerHTML = '<img src="'+p.data+'" alt="'+p.filename.replace(/"/g,'&quot;')+'" onclick="window.open(\''+p.data+'\')">';
-              } else {
-                el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:2rem">📄</div>';
+        cin.photos.forEach(function(ref, idx) {
+          var thumbId = 'thumb_'+t.id+'_'+idx;
+          var el = document.getElementById(thumbId);
+          if (!el) return;
+          // Supabase URL: display directly
+          if (typeof ref === 'string' && ref.startsWith('http')) {
+            el.innerHTML = '<img src="'+ref+'" alt="照片" onclick="window.open(\''+ref+'\')" style="width:100%;height:100%;object-fit:cover;cursor:pointer">'+
+              '<button class="btn-del-file" onclick="deletePhotoFile('+t.id+',\''+ref+'\')">✕</button>';
+          }
+          // IndexedDB ID (with idb: prefix or plain number)
+          else {
+            var idbId = typeof ref === 'string' && ref.startsWith('idb:') ? parseInt(ref.slice(4)) : ref;
+            getPhoto(idbId).then(function(p) {
+              if (el && p) {
+                if (p.mime.startsWith('image/')) {
+                  el.innerHTML = '<img src="'+p.data+'" alt="'+p.filename.replace(/"/g,'&quot;')+'" onclick="window.open(\''+p.data+'\')">';
+                } else {
+                  el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:2rem">📄</div>';
+                }
+                el.innerHTML += '<div class="file-name">'+p.filename.replace(/</g,'&lt;')+'</div><button class="btn-del-file" onclick="deletePhotoFile('+t.id+','+idbId+')">✕</button>';
               }
-              el.innerHTML += '<div class="file-name">'+p.filename.replace(/</g,'&lt;')+'</div><button class="btn-del-file" onclick="deletePhotoFile('+t.id+','+pid+')">✕</button>';
-            }
-          });
+            });
+          }
         });
       }
     });
@@ -1233,8 +1363,15 @@ async function handleUpload(taskId, input) {
 
   for (const file of input.files) {
     try {
-      const photoId = await savePhoto(file);
-      cin.photos.push(photoId);
+      // Upload to Supabase Storage (primary)
+      const url = await uploadPhotoToCloud(file, taskId);
+      if (url) {
+        cin.photos.push(url);
+      } else {
+        // Fallback: save to IndexedDB as base64
+        const photoId = await savePhoto(file);
+        cin.photos.push('idb:'+photoId);
+      }
     } catch(e) { showMsg('上传失败: '+e.message, 'err'); }
   }
   checkins[key] = cin;
@@ -1245,15 +1382,22 @@ async function handleUpload(taskId, input) {
   showMsg('📸 上传成功！', 'ok');
 }
 
-async function deletePhotoFile(taskId, photoId) {
+async function deletePhotoFile(taskId, photoRef) {
   const key = `${currentDate}_${taskId}`;
   const checkins = getCheckins();
   const cin = checkins[key];
   if (!cin) return;
-  cin.photos = cin.photos.filter(p => p !== photoId);
+  cin.photos = cin.photos.filter(p => p !== photoRef);
   checkins[key] = cin;
   setCheckins(checkins);
-  await deletePhoto(photoId);
+  // Delete from cloud or IndexedDB
+  if (typeof photoRef === 'string' && photoRef.startsWith('http')) {
+    await deletePhotoFromCloud(photoRef);
+  } else if (typeof photoRef === 'string' && photoRef.startsWith('idb:')) {
+    await deletePhoto(parseInt(photoRef.slice(4)));
+  } else if (typeof photoRef === 'number') {
+    await deletePhoto(photoRef);
+  }
   render();
 }
 
@@ -1374,10 +1518,9 @@ function recordSpin(prize) {
   var history = getLotteryHistory();
   history.push({id:Date.now(), name:prize.name, icon:prize.icon, date:spinDate, redeemed:false});
   setLotteryHistory(history);
-  // Force write unlocks to localStorage directly (bypass any override issues)
   var unlocks = getUnlocks();
   unlocks.push({date:spinDate, id:Date.now()});
-  localStorage.setItem('unlocks', JSON.stringify(unlocks));
+  setUnlocks(unlocks);
   if (prize.name.includes('免练字')) {
     var coupons = getCoupons();
     coupons.push({id:Date.now(), taskName:'语文练字', wonDate:spinDate, used:false});
@@ -1394,7 +1537,7 @@ function recordSpin(prize) {
     bp[spinDate] = (bp[spinDate]||0) + bonusEarned;
     setBonusPoints(bp);
   }
-  scheduleBackup();
+  syncToCloud();
   return prize;
 }
 
@@ -1714,7 +1857,6 @@ function importData(input) {
       if (data.coupons) setCoupons(data.coupons);
       if (data.unlocks) setUnlocks(data.unlocks);
       if (data.dailyThreshold) LS.set('dailyThreshold', data.dailyThreshold);
-      if (data.dailyThreshold) LS.set('dailyThreshold', data.dailyThreshold);
       if (data.bonusPoints) LS.set('bonus_points', data.bonusPoints);
       showMsg('📥 数据已导入', 'ok');
     } catch(e) {
@@ -1729,18 +1871,18 @@ function importData(input) {
 function resetData() {
   if (!confirm('确定要重置所有数据吗？此操作不可撤销！\n\n建议先导出数据备份。')) return;
   localStorage.clear();
+  // Also delete from Supabase
+  var client = getSupabase();
+  if (client) {
+    client.from('app_state').delete().eq('id', 1).then(function() {
+      console.log('Cloud data cleared');
+    });
+  }
   showMsg('🔄 数据已重置，请刷新页面', 'ok');
   setTimeout(() => location.reload(), 1500);
 }
 
-// ===== PERSISTENCE =====
-function requestPersistence() {
-  if ('storage' in navigator && 'persist' in navigator.storage) {
-    navigator.storage.persist().then(granted => {
-      if (granted) console.log('✅ 数据持久化已启用');
-    });
-  }
-}
+// ===== CLOUD SYNC (replaces old backup/persistence system) =====
 
 // Auto-backup on significant changes (debounced, 5s after last change)
 let backupTimer = null;
@@ -1806,17 +1948,17 @@ const _setUnlocks = setUnlocks;
 const _setTasks = setTasks;
 const _setBonusPoints = setBonusPoints;
 
-setCheckins = function(v) { _setCheckins(v); scheduleBackup(); };
-setTravelDays = function(v) { _setTravelDays(v); scheduleBackup(); };
-setLotteryHistory = function(v) { _setLotteryHistory(v); scheduleBackup(); };
-setCoupons = function(v) { _setCoupons(v); scheduleBackup(); };
-setUnlocks = function(v) { _setUnlocks(v); scheduleBackup(); };
-setTasks = function(v) { _setTasks(v); scheduleBackup(); };
-setBonusPoints = function(v) { _setBonusPoints(v); scheduleBackup(); };
+setCheckins = function(v) { _setCheckins(v); syncToCloud(); };
+setTravelDays = function(v) { _setTravelDays(v); syncToCloud(); };
+setLotteryHistory = function(v) { _setLotteryHistory(v); syncToCloud(); };
+setCoupons = function(v) { _setCoupons(v); syncToCloud(); };
+setUnlocks = function(v) { _setUnlocks(v); syncToCloud(); };
+setTasks = function(v) { _setTasks(v); syncToCloud(); };
+setBonusPoints = function(v) { _setBonusPoints(v); syncToCloud(); };
 LS.set = function(k, v) {
   localStorage.setItem(k, JSON.stringify(v));
   if (['tasks','prizes','checkins','travel_days','lottery_history','coupons','unlocks','dailyThreshold','bonus_points'].includes(k)) {
-    scheduleBackup();
+    syncToCloud();
   }
 };
 
@@ -1855,42 +1997,75 @@ function checkSettingsPwd(input) {
 // ===== INIT =====
 function startApp() {
 openDB().then(() => {
-  requestPersistence();
-
   // Check if fresh start (no tasks in localStorage)
-  const hasData = localStorage.getItem('tasks') !== null;
-  if (!hasData) {
-    // Try to restore from auto-backup
-    const restored = restoreAutoBackup();
-    if (restored) {
-      render();
-      showMsg('🔄 已自动恢复数据（上次保存：'+lastSaveTime()+'）', 'ok');
-    } else {
-      // Show restore screen
-      document.getElementById('app').innerHTML = `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(135deg,#FFF8F0,#FFE0CC);font-family:system-ui,sans-serif"><div style="background:#fff;border-radius:24px;padding:40px 28px;box-shadow:0 8px 32px rgba(0,0,0,0.1);text-align:center;max-width:360px;width:100%"><div style="font-size:4rem;margin-bottom:12px">🏖️</div><h1 style="color:#FF6B35;margin-bottom:8px">暑假打卡</h1><p style="color:#7F8C8D;margin-bottom:24px">欢迎使用！请导入备份文件来恢复数据，<br>或直接开始新的打卡之旅</p><label style="display:block;padding:14px;background:linear-gradient(135deg,#FF6B35,#FF8C42);color:#fff;border-radius:12px;font-weight:700;cursor:pointer;margin-bottom:12px">📥 导入备份文件<input type="file" accept=".json" style="display:none" onchange="handleStartupImport(this)"></label><button onclick="freshStart()" style="width:100%;padding:14px;background:#fff;border:2px solid #ECF0F1;border-radius:12px;font-size:.95rem;cursor:pointer;color:#2C3E50">✨ 直接开始</button></div></div>`;
-    }
-  } else {
+  var hasLocalData = localStorage.getItem('tasks') !== null;
+
+  if (hasLocalData) {
+    // Render immediately from localStorage cache
     render();
+    // Background sync from Supabase cloud
+    loadFromCloud().then(function(cloudRow) {
+      if (cloudRow) {
+        var localTime = localStorage.getItem('_lastCloudSync') || '1970-01-01';
+        var cloudTime = cloudRow.updated_at || '1970-01-01';
+        if (cloudTime > localTime) {
+          // Cloud is newer → merge
+          restoreFromCloud(cloudRow);
+          localStorage.setItem('_lastCloudSync', cloudTime);
+          render();
+          console.log('☁️ 云端数据已同步');
+        }
+      } else {
+        // No cloud data yet → push local data to cloud
+        syncToCloud();
+        if (cloudSyncTimer) { clearTimeout(cloudSyncTimer); cloudSyncTimer = null; }
+        // Trigger immediate sync
+        var client = getSupabase();
+        if (client) {
+          var d = {
+            tasks: getTasks(), prizes: getPrizes(), checkins: getCheckins(),
+            travel_days: getTravelDays(), lottery_history: getLotteryHistory(),
+            coupons: getCoupons(), unlocks: getUnlocks(),
+            dailyThreshold: getDailyThreshold(), bonus_points: getBonusPoints(),
+          };
+          client.from('app_state').upsert({ id: 1, data: d, updated_at: new Date().toISOString() }).then(function() {
+            localStorage.setItem('_lastCloudSync', new Date().toISOString());
+          });
+        }
+      }
+    });
+  } else {
+    // No local data — try to restore from cloud
+    loadFromCloud().then(function(cloudRow) {
+      if (cloudRow && restoreFromCloud(cloudRow)) {
+        localStorage.setItem('_lastCloudSync', cloudRow.updated_at || new Date().toISOString());
+        render();
+        showMsg('☁️ 已从云端恢复数据', 'ok');
+      } else {
+        // Fresh start — show welcome screen
+        document.getElementById('app').innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(135deg,#FFF8F0,#FFE0CC);font-family:system-ui,sans-serif"><div style="background:#fff;border-radius:24px;padding:40px 28px;box-shadow:0 8px 32px rgba(0,0,0,0.1);text-align:center;max-width:360px;width:100%"><div style="font-size:4rem;margin-bottom:12px">🏖️</div><h1 style="color:#FF6B35;margin-bottom:8px">暑假打卡</h1><p style="color:#7F8C8D;margin-bottom:24px">欢迎使用！请导入备份文件来恢复数据，<br>或直接开始新的打卡之旅</p><label style="display:block;padding:14px;background:linear-gradient(135deg,#FF6B35,#FF8C42);color:#fff;border-radius:12px;font-weight:700;cursor:pointer;margin-bottom:12px">📥 导入备份文件<input type="file" accept=".json" style="display:none" onchange="handleStartupImport(this)"></label><button onclick="freshStart()" style="width:100%;padding:14px;background:#fff;border:2px solid #ECF0F1;border-radius:12px;font-size:.95rem;cursor:pointer;color:#2C3E50">✨ 直接开始</button></div></div>';
+      }
+    });
   }
 
-  // Save on page close
-  window.addEventListener('beforeunload', () => {
-    scheduleBackup();
-    // Force immediate save
-    if (backupTimer) { clearTimeout(backupTimer); backupTimer = null; }
-    const data = {
-      tasks: getTasks(), prizes: getPrizes(), checkins: getCheckins(),
-      travelDays: getTravelDays(), lotteryHistory: getLotteryHistory(),
-      coupons: getCoupons(), unlocks: getUnlocks(),
-      dailyThreshold: getDailyThreshold(),
-      bonusPoints: getBonusPoints(), saved: new Date().toISOString(),
-    };
-    try { localStorage.setItem('_autobackup', JSON.stringify(data)); } catch(e) {}
+  // Save on page close — push to cloud
+  window.addEventListener('beforeunload', function() {
+    if (cloudSyncTimer) { clearTimeout(cloudSyncTimer); cloudSyncTimer = null; }
+    // Force immediate cloud sync
+    var client = getSupabase();
+    if (client) {
+      var d = {
+        tasks: getTasks(), prizes: getPrizes(), checkins: getCheckins(),
+        travel_days: getTravelDays(), lottery_history: getLotteryHistory(),
+        coupons: getCoupons(), unlocks: getUnlocks(),
+        dailyThreshold: getDailyThreshold(), bonus_points: getBonusPoints(),
+      };
+      // Use sendBeacon for reliable page-close sync
+      var blob = new Blob([JSON.stringify({ id: 1, data: d, updated_at: new Date().toISOString() })], {type:'application/json'});
+      navigator.sendBeacon(SUPABASE_URL + '/rest/v1/app_state?id=eq.1', blob);
+    }
   });
-
-  // Periodic full backup every 5 min
-  setInterval(() => scheduleBackup(), 300000);
-}).catch(err => {
+}).catch(function(err) {
   document.getElementById('app').innerHTML = '<div style="text-align:center;padding:40px"><h2>❌ 初始化失败</h2><p>'+err.message+'</p><p>请尝试刷新页面</p></div>';
 });
 } // end startApp
@@ -1913,9 +2088,8 @@ function handleStartupImport(input) {
       if (data.coupons) setCoupons(data.coupons);
       if (data.unlocks) setUnlocks(data.unlocks);
       if (data.dailyThreshold) LS.set('dailyThreshold', data.dailyThreshold);
-      if (data.dailyThreshold) LS.set('dailyThreshold', data.dailyThreshold);
       if (data.bonusPoints) LS.set('bonus_points', data.bonusPoints);
-      scheduleBackup();
+      syncToCloud();
       render();
       showMsg('📥 数据已恢复！', 'ok');
     } catch(e) { showMsg('文件格式错误', 'err'); }
@@ -1924,9 +2098,10 @@ function handleStartupImport(input) {
 }
 
 function freshStart() {
-  // Clear any auto-backup, keep defaults from code
-  localStorage.removeItem('_autobackup');
+  // Start fresh with defaults, push to cloud
+  localStorage.clear();
   render();
+  syncToCloud();
   showMsg('✨ 全新开始！', 'ok');
 }
 </script>

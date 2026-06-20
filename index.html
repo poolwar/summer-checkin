@@ -1870,16 +1870,21 @@ function importData(input) {
 
 function resetData() {
   if (!confirm('确定要重置所有数据吗？此操作不可撤销！\n\n建议先导出数据备份。')) return;
-  localStorage.clear();
-  // Also delete from Supabase
+  // Clear sync timer so no pending push
+  if (cloudSyncTimer) { clearTimeout(cloudSyncTimer); cloudSyncTimer = null; }
+  // Delete from Supabase cloud first
   var client = getSupabase();
   if (client) {
     client.from('app_state').delete().eq('id', 1).then(function() {
       console.log('Cloud data cleared');
     });
   }
+  // Clear localStorage
+  localStorage.clear();
+  // Set flag to prevent cloud restore on reload
+  sessionStorage.setItem('_just_reset', '1');
   showMsg('🔄 数据已重置，请刷新页面', 'ok');
-  setTimeout(() => location.reload(), 1500);
+  setTimeout(function() { location.reload(); }, 800);
 }
 
 // ===== CLOUD SYNC (replaces old backup/persistence system) =====
@@ -2035,7 +2040,14 @@ openDB().then(() => {
       }
     });
   } else {
-    // No local data — try to restore from cloud
+    // No local data — check if just reset
+    if (sessionStorage.getItem('_just_reset') === '1') {
+      sessionStorage.removeItem('_just_reset');
+      // Skip cloud restore, go straight to fresh start
+      document.getElementById('app').innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(135deg,#FFF8F0,#FFE0CC);font-family:system-ui,sans-serif"><div style="background:#fff;border-radius:24px;padding:40px 28px;box-shadow:0 8px 32px rgba(0,0,0,0.1);text-align:center;max-width:360px;width:100%"><div style="font-size:4rem;margin-bottom:12px">🏖️</div><h1 style="color:#FF6B35;margin-bottom:8px">暑假打卡</h1><p style="color:#7F8C8D;margin-bottom:24px">数据已全部重置！<br>开始新的打卡之旅吧</p><button onclick="freshStart()" style="width:100%;padding:14px;background:linear-gradient(135deg,#FF6B35,#FF8C42);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer">✨ 开始使用</button></div></div>';
+      return;
+    }
+    // Try to restore from cloud
     loadFromCloud().then(function(cloudRow) {
       if (cloudRow && restoreFromCloud(cloudRow)) {
         localStorage.setItem('_lastCloudSync', cloudRow.updated_at || new Date().toISOString());

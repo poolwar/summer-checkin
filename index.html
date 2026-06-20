@@ -59,7 +59,8 @@ nav.bottom-nav{
 .progress-track{width:100%;height:28px;background:#F5F0ED;border-radius:14px;overflow:hidden;margin:10px 0}
 .progress-fill{height:100%;background:linear-gradient(90deg,#E8845C,#EFA57D);border-radius:14px;
   transition:width .5s;display:flex;align-items:center;justify-content:center;font-size:.7rem;
-  font-weight:700;color:#fff;min-width:0}
+  font-weight:700;color:#fff;min-width:2.5em}
+.progress-fill.empty{background:#E8E3DF;color:var(--text-light)}
 .progress-fill.complete{background:linear-gradient(90deg,#5DAF7C,#7DC99B)}
 
 /* ===== Task Items ===== */
@@ -624,7 +625,7 @@ function render() {
 
     // Today card
     const maxPts = activeTasks.reduce((s,t) => s + (t.points||0), 0);
-    const pctW = maxPts > 0 ? Math.min(100, (pooledPts / threshold) * 100) : 0;
+    const pctW = Math.max(5, maxPts > 0 ? Math.min(100, (pooledPts / threshold) * 100) : 0);
     const totalTasks = activeTasks.length;
     let doneCount = 0;
     activeTasks.forEach(t => { if (checkins[currentDate+'_'+t.id]?.status === 'done') doneCount++; });
